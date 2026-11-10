@@ -2,12 +2,15 @@ import type { ListMessagesInput } from "../import.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationAccess } from "./conversation-access.js";
 import type { MessagePageResult, MessageRepository } from "./message.repository.js";
+import type { MessageReactionRepository } from "./message-reaction.repository.js";
 
 export class ListMessagesUseCase {
   public constructor(
     private readonly authorizer: Authorizer,
     private readonly access: ConversationAccess,
     private readonly messages: MessageRepository,
+    // Absent in a spec about paging alone; the page then carries no reactions.
+    private readonly reactions: MessageReactionRepository | null = null,
   ) {}
 
   public async execute(actor: Principal, input: ListMessagesInput): Promise<MessagePageResult> {
@@ -21,11 +24,27 @@ export class ListMessagesUseCase {
 
     // The newest message's time bounds the first page, so it reads the months up to it
     // rather than every month `messages` holds. See docs/reference/messaging.md.
-    return this.messages.list(actor.organizationId, {
+    const page = await this.messages.list(actor.organizationId, {
       conversationId: input.conversationId,
       limit: input.limit,
       before: input.before,
       upTo: conversation.lastMessageAt,
     });
+    if (!this.reactions || page.items.length === 0) return page;
+
+    // One query for the page, inside the months it already read (`26.1`).
+    const times = page.items.map((item) => item.createdAt.getTime());
+    const summaries = await this.reactions.summaries(
+      actor.organizationId,
+      input.conversationId,
+      page.items.map((item) => item.id),
+      new Date(Math.min(...times)),
+      new Date(Math.max(...times)),
+      actor.userId,
+    );
+    return {
+      ...page,
+      items: page.items.map((item) => ({ ...item, reactions: summaries.get(item.id) ?? [] })),
+    };
   }
 }

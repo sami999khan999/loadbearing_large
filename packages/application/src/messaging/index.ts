@@ -33,10 +33,16 @@ export {
   type MessageRecord,
   MessageRepository,
   type NewMessage,
+  type ReactionSummary,
   type UnreadCount,
 } from "./message.repository.js";
+export {
+  type MessageReactionKey,
+  MessageReactionRepository,
+} from "./message-reaction.repository.js";
 export { MessagingRules } from "./messaging.rules.js";
 export { MessagingRealtimeSubscriber } from "./messaging-realtime.subscriber.js";
+export { ReactToMessageUseCase } from "./react-to-message.use-case.js";
 export { RemoveConversationMemberUseCase } from "./remove-conversation-member.use-case.js";
 export { RenameConversationUseCase } from "./rename-conversation.use-case.js";
 export { SendMessageUseCase } from "./send-message.use-case.js";

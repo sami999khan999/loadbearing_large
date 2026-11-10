@@ -1,4 +1,4 @@
-import type { ConversationId, MessageId, OrganizationId, UserId } from "../import.js";
+import type { ConversationId, MessageEmoji, MessageId, OrganizationId, UserId } from "../import.js";
 
 export interface MessageRecord {
   readonly id: MessageId;
@@ -9,6 +9,14 @@ export interface MessageRecord {
   readonly deleted: boolean;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
+  // Attached by the list (`26.1`); a message just sent or edited carries none.
+  readonly reactions?: readonly ReactionSummary[];
+}
+
+export interface ReactionSummary {
+  readonly emoji: MessageEmoji;
+  readonly count: number;
+  readonly mine: boolean;
 }
 
 export interface MessagePageResult {

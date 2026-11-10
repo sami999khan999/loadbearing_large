@@ -2,6 +2,7 @@ const ACTIVITY_LOG = "activity_log";
 const OUTBOX_EVENT = "outbox_event";
 const NOTIFICATIONS = "notifications";
 const MESSAGES = "messages";
+const MESSAGE_REACTIONS = "message_reactions";
 const CONVERSATIONS = "conversations";
 const CONVERSATION_MEMBERS = "conversation_members";
 const NOTIFICATION_PREFERENCES = "notification_preferences";
@@ -81,6 +82,13 @@ const ALL = Object.freeze([
   // manageable table and a ready archive path rather than a retention policy.
   Object.freeze({
     name: MESSAGES,
+    tenantKey: "organization_id",
+    column: "created_at",
+    retentionMonths: null,
+  }),
+  // A message's reactions (`26.1`), in its month, kept as long as the message is: D47.
+  Object.freeze({
+    name: MESSAGE_REACTIONS,
     tenantKey: "organization_id",
     column: "created_at",
     retentionMonths: null,
@@ -194,6 +202,7 @@ export class PartitionedTable {
   public static readonly OUTBOX_EVENT = OUTBOX_EVENT;
   public static readonly NOTIFICATIONS = NOTIFICATIONS;
   public static readonly MESSAGES = MESSAGES;
+  public static readonly MESSAGE_REACTIONS = MESSAGE_REACTIONS;
   public static readonly CONVERSATIONS = CONVERSATIONS;
   public static readonly CONVERSATION_MEMBERS = CONVERSATION_MEMBERS;
   public static readonly NOTIFICATION_PREFERENCES = NOTIFICATION_PREFERENCES;
