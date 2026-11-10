@@ -135,6 +135,9 @@ export {
   type LogEntry,
   type LogQuery,
   LogReader,
+  type MailDeliveryCursor,
+  type MailDeliveryRecord,
+  type MailDeliveryRepository,
   type MaintenanceGateway,
   // A value: the unified adapter extends it.
   MarkdownRenderer,

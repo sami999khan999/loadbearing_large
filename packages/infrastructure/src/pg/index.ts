@@ -29,6 +29,7 @@ export {
   PgFlagRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
+  PgMailDeliveryRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
