@@ -142,6 +142,18 @@ class Recipients implements NotificationRecipientReader {
     return Promise.resolve([]);
   }
 
+  public conversationMembersAmong(
+    _organizationId: unknown,
+    _conversationId: unknown,
+    userIds: readonly string[],
+  ): Promise<readonly Recipient[]> {
+    return Promise.resolve(
+      (this as unknown as { members?: readonly Recipient[] }).members?.filter((member) =>
+        userIds.includes(member.userId),
+      ) ?? [],
+    );
+  }
+
   public conversationMembers(): Promise<readonly Recipient[]> {
     return Promise.resolve([]);
   }

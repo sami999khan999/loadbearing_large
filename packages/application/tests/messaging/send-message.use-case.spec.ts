@@ -126,6 +126,20 @@ const input = { conversationId: CONVERSATION, body: "hello", clientId: message()
 const dedupeKey = `message:client:${ORG}:${CONVERSATION}:${input.clientId}`;
 
 describe("SendMessageUseCase", () => {
+  // `26.7`: the `<@id>` tokens, once each and never the author, ride the event.
+  it("names the people the body mentions in the event", async () => {
+    const harness = build();
+    const ada = "018f8c00-0000-7000-8000-0000000000a1";
+    const self = principal().userId;
+
+    await harness.useCase.execute(principal(), {
+      ...input,
+      body: `hi <@${ada}> and <@${ada}> and me <@${self}>`,
+    });
+
+    expect(harness.events.published[0]?.payload).toMatchObject({ mentions: [ada] });
+  });
+
   // One save, one touch, one event — the write shape the whole slice's cost rests on.
   // A second statement per send is a second statement per message, forever.
   it("writes once, touches once and publishes one event", async () => {

@@ -150,6 +150,18 @@ class Recipients implements NotificationRecipientReader {
     return Promise.resolve(this.members);
   }
 
+  public conversationMembersAmong(
+    _organizationId: unknown,
+    _conversationId: unknown,
+    userIds: readonly string[],
+  ): Promise<readonly Recipient[]> {
+    return Promise.resolve(
+      (this as unknown as { members?: readonly Recipient[] }).members?.filter((member) =>
+        userIds.includes(member.userId),
+      ) ?? [],
+    );
+  }
+
   public conversationMembers(): Promise<readonly Recipient[]> {
     return Promise.resolve(this.members);
   }
@@ -255,6 +267,40 @@ beforeEach(() => {
 });
 
 describe("DeliverNotificationUseCase", () => {
+  const channelMessage = (mentions: readonly string[]) =>
+    ({
+      id: "018f8c00-0000-7000-8000-000000000023",
+      organizationId: ORG,
+      name: "message.sent",
+      actorId: ACTOR,
+      occurredAt: new Date("2026-08-15T00:00:00Z"),
+      payload: {
+        conversationId: "018f8c00-0000-7000-8000-0000000000c2",
+        messageId: "018f8c00-0000-7000-8000-0000000000d2",
+        conversationKind: "channel",
+        mentions,
+      },
+    }) as unknown as DomainEvent;
+
+  // `26.7`: a channel message notifies nobody, unless it names people in the room.
+  it("notifies the members a channel message mentions, and only them", async () => {
+    const deliver = build([], [recipient(TARGET)]);
+
+    await deliver.execute(system(), channelMessage([TARGET]));
+
+    expect(notifications.saved).toHaveLength(1);
+    expect(notifications.saved[0]).toMatchObject({ userId: TARGET, kind: "message.mentioned" });
+  });
+
+  it("notifies nobody for a mention of someone outside the room, or no mention at all", async () => {
+    const deliver = build([], [recipient(TARGET)]);
+
+    await deliver.execute(system(), channelMessage(["018f8c00-0000-7000-8000-0000000000ee"]));
+    await deliver.execute(system(), channelMessage([]));
+
+    expect(notifications.saved).toHaveLength(0);
+  });
+
   // `26.7`: a reader with an unread item about this conversation gets it counted, not a
   // second item, and someone without one gets a fresh row.
   it("counts a direct message into the reader's unread item instead of writing another", async () => {

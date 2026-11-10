@@ -4,6 +4,7 @@ import {
   type ConversationKind,
   type MessageId,
   type SendMessageInput,
+  type UserId,
   Uuid,
 } from "../import.js";
 import type {
@@ -154,10 +155,22 @@ export class SendMessageUseCase {
         messageId: message.id,
         createdAt: message.createdAt,
         conversationKind,
+        mentions: SendMessageUseCase.mentionsIn(input.body, actor.userId),
       },
     });
 
     return message;
+  }
+
+  // The `<@id>` tokens the composer inserts (`26.7`), once each, never the author, at most
+  // twenty: a message naming the whole room is a channel-wide ping, which this is not.
+  private static mentionsIn(body: string, author: UserId): UserId[] {
+    const found = new Set<string>();
+    for (const match of body.matchAll(/<@([0-9a-f-]{36})>/g)) {
+      if (match[1] && match[1] !== author) found.add(match[1]);
+      if (found.size >= 20) break;
+    }
+    return [...found] as UserId[];
   }
 
   // Scoped to the conversation as well as the tenant, so two clients that happened to

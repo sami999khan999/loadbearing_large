@@ -16,7 +16,9 @@ export type RecipientRule =
   | { readonly kind: "organizationMembers"; readonly holding: PermissionKey }
   // The people in the conversation, minus the author. No permission: membership of the
   // room is the authorization, and everyone in one can already read it.
-  | { readonly kind: "conversationMembers" };
+  | { readonly kind: "conversationMembers" }
+  // The members a channel message names (`26.7`), intersected with the room at delivery.
+  | { readonly kind: "mentionedMembers" };
 
 export interface PolicyRow {
   readonly kind: NotificationKind;
@@ -81,6 +83,26 @@ const ROWS = Object.freeze({
   },
 } as const satisfies Partial<Record<DomainEventName, PolicyRow>>);
 
+// A channel message that names people (`26.7`): not a row of its own event, because the
+// same `message.sent` is a DM's `message.received`. `rowForEvent` picks between them.
+const MENTION_ROW: PolicyRow = Object.freeze<PolicyRow>({
+  kind: "message.mentioned",
+  category: "messaging",
+  recipients: { kind: "mentionedMembers" },
+  // Named is worth interrupting a screen for, and an inbox at once rather than tomorrow.
+  defaultMode: { in_app: "immediate", email: "immediate" },
+  link: (event: DomainEvent) =>
+    "conversationId" in event.payload ? `/messages/${event.payload.conversationId}` : null,
+  // One unread mention item per room, counted, as direct messages are.
+  subject: (event: DomainEvent) =>
+    "conversationId" in event.payload ? event.payload.conversationId : null,
+});
+
+const ALL_ROWS: readonly PolicyRow[] = Object.freeze([
+  ...Object.values(ROWS as Record<string, PolicyRow>),
+  MENTION_ROW,
+]);
+
 const NAMES: readonly DomainEventName[] = Object.freeze(Object.keys(ROWS) as DomainEventName[]);
 
 // How intrusive a mode is, most first. Where two kinds of one category disagree, the
@@ -92,22 +114,22 @@ const LOUDNESS: readonly NotificationMode[] = Object.freeze(["immediate", "diges
 const DEFAULT_BY_CATEGORY: Readonly<
   Record<string, Readonly<Record<NotificationChannel, NotificationMode>>>
 > = Object.freeze(
-  Object.values(ROWS as Record<string, PolicyRow>)
-    .filter((row) => row.recipients.kind !== "none")
-    .reduce<Record<string, Record<NotificationChannel, NotificationMode>>>((found, row) => {
-      const current = found[row.category];
-      if (!current) {
-        found[row.category] = { ...row.defaultMode };
-        return found;
-      }
-
-      for (const channel of ["in_app", "email"] as const) {
-        const mine = LOUDNESS.indexOf(row.defaultMode[channel]);
-        if (mine < LOUDNESS.indexOf(current[channel])) current[channel] = row.defaultMode[channel];
-      }
-
+  ALL_ROWS.filter((row) => row.recipients.kind !== "none").reduce<
+    Record<string, Record<NotificationChannel, NotificationMode>>
+  >((found, row) => {
+    const current = found[row.category];
+    if (!current) {
+      found[row.category] = { ...row.defaultMode };
       return found;
-    }, {}),
+    }
+
+    for (const channel of ["in_app", "email"] as const) {
+      const mine = LOUDNESS.indexOf(row.defaultMode[channel]);
+      if (mine < LOUDNESS.indexOf(current[channel])) current[channel] = row.defaultMode[channel];
+    }
+
+    return found;
+  }, {}),
 );
 
 // Keyed by kind, and built only from the rows that actually write one: a row with no
@@ -116,9 +138,10 @@ const DEFAULT_BY_KIND: Readonly<
   Record<string, Readonly<Record<NotificationChannel, NotificationMode>>>
 > = Object.freeze(
   Object.fromEntries(
-    Object.values(ROWS as Record<string, PolicyRow>)
-      .filter((row) => row.recipients.kind !== "none")
-      .map((row) => [row.kind, row.defaultMode]),
+    ALL_ROWS.filter((row) => row.recipients.kind !== "none").map((row) => [
+      row.kind,
+      row.defaultMode,
+    ]),
   ),
 );
 
@@ -157,6 +180,23 @@ export class NotificationPolicy {
     channel: NotificationChannel,
   ): NotificationMode {
     return DEFAULT_BY_KIND[kind]?.[channel] ?? "off";
+  }
+
+  // The row an event delivers under, or null for none: its own row when that applies, and
+  // the mention row for a channel message that names people (`26.7`).
+  public static rowForEvent(event: DomainEvent): PolicyRow | null {
+    if (NotificationPolicy.mentions(event).length > 0 && !NotificationPolicy.applies(event)) {
+      return MENTION_ROW;
+    }
+    const row = NotificationPolicy.rowFor(event.name);
+    return row && NotificationPolicy.applies(event) ? row : null;
+  }
+
+  public static mentions(event: DomainEvent): readonly string[] {
+    if (event.name !== "message.sent") return [];
+    return "mentions" in event.payload && Array.isArray(event.payload.mentions)
+      ? event.payload.mentions
+      : [];
   }
 
   // Absent `when` means every event of the name produces one, which is the common case

@@ -39,10 +39,10 @@ export class DeliverNotificationUseCase {
   ) {}
 
   public async execute(actor: Principal, event: DomainEvent): Promise<void> {
-    const row = NotificationPolicy.rowFor(event.name);
-    // `applies` is the per-event half of the row: a message in a channel matches the
-    // name and still produces nothing.
-    if (!row || !NotificationPolicy.applies(event)) return;
+    // A message in a channel matches its name and still produces nothing, unless it
+    // names people: then it is a mention, delivered to them alone (`26.7`).
+    const row = NotificationPolicy.rowForEvent(event);
+    if (!row) return;
 
     const audience = await this.suppressed(event, await this.audienceFor(event, row), row);
     if (audience.length === 0) return;
@@ -92,6 +92,18 @@ export class DeliverNotificationUseCase {
           RECIPIENT_LIMIT,
         );
         return all.filter((recipient) => recipient.userId !== event.actorId);
+      }
+      case "mentionedMembers": {
+        const conversationId = DeliverNotificationUseCase.conversationOf(event);
+        const named = NotificationPolicy.mentions(event) as readonly UserId[];
+        if (!conversationId || named.length === 0) return [];
+
+        const members = await this.recipients.conversationMembersAmong(
+          organizationId,
+          conversationId,
+          named,
+        );
+        return members.filter((recipient) => recipient.userId !== event.actorId);
       }
       case "organizationMembers": {
         const all = await this.recipients.organizationMembers(
