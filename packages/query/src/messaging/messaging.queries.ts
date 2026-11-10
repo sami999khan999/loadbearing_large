@@ -24,6 +24,16 @@ export class MessagingQueries {
     });
   }
 
+  // Re-read every thirty seconds while the page is open: a lease lasts ninety (`26.6`).
+  public static presence(client: ApiClient, conversationId: string) {
+    return queryOptions({
+      queryKey: QueryKeys.conversation.presence(conversationId),
+      queryFn: ({ signal }) => client.conversation.presence({ conversationId }, { signal }),
+      staleTime: 30_000,
+      refetchInterval: 30_000,
+    });
+  }
+
   public static conversation(client: ApiClient, conversationId: string) {
     return queryOptions({
       queryKey: QueryKeys.conversation.get(conversationId),

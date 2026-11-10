@@ -83,6 +83,7 @@ export class QueryKeys {
     list: (params: unknown) => ["conversation", "list", params] as const,
     lists: () => ["conversation", "list"] as const,
     get: (conversationId: string) => ["conversation", "get", conversationId] as const,
+    presence: (conversationId: string) => ["conversation", "presence", conversationId] as const,
   };
 
   public static readonly message = {
