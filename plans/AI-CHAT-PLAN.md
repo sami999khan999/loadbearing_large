@@ -183,8 +183,8 @@ the word. Every name below is `assistant`.
 - **7, client and UI** — **built 2026-10-19; not walked in a browser yet.** `/assistant` and
   `/assistant/$threadId`, the nav entry with its own `sparkle` icon, English and Bengali copy.
   `RealtimeStream.run` took `resumesFrom` and `endsWith`, so an answer resumes from any frame and
-  stops at `done`. **Answers render as plain text with their line breaks**, not as Markdown: the
-  client has no Markdown renderer, and adding one is a dependency decision left open. Checked
+  stops at `done`. **Answers render as Markdown** since 2026-11-11 (owner's call): `MarkdownText` in
+  `ui`, `react-markdown` with GFM and `rehype-sanitize`, code-split with the assistant pages. Checked
   over HTTP against `pnpm dev`: both pages server-render for a plain member, a question answers
   through the worker, its stream ends in one `done`, and doc sources link into `/doc`:
   - `api-client`, plus `query/src/assistant/` with a `useAssistantStream` hook on
