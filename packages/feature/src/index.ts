@@ -116,6 +116,8 @@ export { ModuleNav, type ModuleNavProps } from "./nav/index.js";
 export {
   ArchivedNotificationList,
   type ArchivedNotificationListProps,
+  DigestHourForm,
+  type DigestHourFormProps,
   NotificationBell,
   type NotificationBellProps,
   NotificationList,

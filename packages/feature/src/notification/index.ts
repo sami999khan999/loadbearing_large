@@ -2,6 +2,7 @@ export {
   ArchivedNotificationList,
   type ArchivedNotificationListProps,
 } from "./archived-notification.list.js";
+export { DigestHourForm, type DigestHourFormProps } from "./digest-hour.form.js";
 export { NotificationList, type NotificationListProps } from "./notification.list.js";
 export { NotificationBell, type NotificationBellProps } from "./notification-bell.button.js";
 export {
