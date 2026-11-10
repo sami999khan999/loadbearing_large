@@ -12,6 +12,7 @@ import {
   useAppInfiniteQuery,
   useMemo,
 } from "../import.js";
+import { MentionText } from "./mention-text.js";
 
 export interface MessageListProps {
   readonly conversationId: string;
@@ -70,7 +71,11 @@ export function MessageList({ conversationId, nameFor }: MessageListProps) {
             {nameFor ? (
               <strong>{nameFor(row.authorId) ?? t("messaging.member.unknown")}</strong>
             ) : null}
-            {row.deleted ? <em>{t("messaging.conversation.deleted")}</em> : <span>{row.body}</span>}
+            {row.deleted ? (
+              <em>{t("messaging.conversation.deleted")}</em>
+            ) : (
+              <span>{MentionText.render(row.body, nameFor)}</span>
+            )}
             <small>
               {DateFormat.day(row.createdAt)}
               {row.editedAt ? ` · ${t("messaging.conversation.edited")}` : ""}

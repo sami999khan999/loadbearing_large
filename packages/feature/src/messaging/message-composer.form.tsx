@@ -4,21 +4,25 @@ import {
   Button,
   Callout,
   MessagingMutations,
+  Select,
   Textarea,
   useApiClient,
   useRef,
   useState,
 } from "../import.js";
+import { MentionText } from "./mention-text.js";
 
 export interface MessageComposerProps {
   readonly conversationId: string;
+  // The room's other members, for the mention picker (`26.7`). Absent shows no picker.
+  readonly mentionable?: readonly { readonly userId: string; readonly name: string }[];
 }
 
 // Matches the use-case's own rate limit. Throttling here as well keeps the request off
 // the wire rather than having the server refuse it forty times a sentence.
 const TYPING_INTERVAL_MS = 2_000;
 
-export function MessageComposer({ conversationId }: MessageComposerProps) {
+export function MessageComposer({ conversationId, mentionable = [] }: MessageComposerProps) {
   const { t } = useMessages("messaging");
   const describe = useErrorMessage();
   const client = useApiClient();
@@ -71,6 +75,21 @@ export function MessageComposer({ conversationId }: MessageComposerProps) {
         }}
       />
       <small>{t("messaging.compose.hint")}</small>
+      {mentionable.length > 0 ? (
+        <Select
+          label={t("messaging.compose.mention")}
+          value={null}
+          placement="above"
+          onValueChange={(userId) => {
+            if (!userId) return;
+            setBody(
+              (current) =>
+                `${current}${current && !current.endsWith(" ") ? " " : ""}${MentionText.token(userId)} `,
+            );
+          }}
+          options={mentionable.map((member) => ({ value: member.userId, label: member.name }))}
+        />
+      ) : null}
 
       <Button type="submit" variant="primary" disabled={body.trim().length === 0}>
         {t("messaging.compose.send")}
