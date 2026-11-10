@@ -56,4 +56,6 @@ export const notification = {
   "notification.digestHour.label": "Send the organization's digest at",
   "notification.digestHour.hint": "In UTC. Everyone in this organization gets theirs at this hour.",
   "notification.digestHour.readOnly": "This organization's daily digest goes out at {time}.",
+  // A grouped item, beside its title: one bell item for several events (`26.7`).
+  "notification.grouped": "{count} new",
 } as const;

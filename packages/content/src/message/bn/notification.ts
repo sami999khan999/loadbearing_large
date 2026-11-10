@@ -45,4 +45,5 @@ export const notification = {
   "notification.digestHour.label": "প্রতিষ্ঠানের সারসংক্ষেপ পাঠানো হবে",
   "notification.digestHour.hint": "UTC সময়ে। এই প্রতিষ্ঠানের সবাই এই সময়ে তাদেরটি পান।",
   "notification.digestHour.readOnly": "এই প্রতিষ্ঠানের দৈনিক সারসংক্ষেপ {time}-এ যায়।",
+  "notification.grouped": "{count}টি নতুন",
 } as const;
