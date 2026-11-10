@@ -103,6 +103,8 @@ export class QueryKeys {
       ["platform", "retention", "preview", table, months, organizationId ?? null] as const,
     storage: (params: unknown) => ["platform", "storage", params] as const,
     mailDeliveries: (params: unknown) => ["platform", "mail", "deliveries", params] as const,
+    mailSettings: (organizationId: string) =>
+      ["platform", "mail", "settings", organizationId] as const,
     projection: () => ["platform", "projection"] as const,
     assistantUsage: (days: number) => ["platform", "assistant-usage", days] as const,
     policy: () => ["platform", "policy"] as const,

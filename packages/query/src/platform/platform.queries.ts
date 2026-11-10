@@ -146,6 +146,15 @@ export class PlatformQueries {
     });
   }
 
+  // One organization's mail server, or null when it falls back (`26.11`).
+  public static mailSettings(client: ApiClient, organizationId: OrganizationId) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.mailSettings(organizationId),
+      queryFn: () => client.platform.mailSettings({ organizationId }),
+      staleTime: 60_000,
+    });
+  }
+
   // A page of one tenant's mail outcomes. Thirty seconds: support is asking about now.
   public static mailDeliveries(
     client: ApiClient,
