@@ -84,6 +84,7 @@ export {
   InvitationList,
   InviteMemberForm,
   LinkedAccountList,
+  MailDeliveryList,
   MemberAccessPanel,
   MemberList,
   MessageComposer,

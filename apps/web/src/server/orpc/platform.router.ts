@@ -193,6 +193,10 @@ export class PlatformRouter {
     },
   );
 
+  public static readonly mailDeliveries = authed.platform.mailDeliveries.handler(
+    ({ input, context }) => context.container.mail.deliveries.execute(context.principal, input),
+  );
+
   public static readonly assistantUsage = authed.platform.assistantUsage.handler(
     ({ input, context }) =>
       context.container.assistant.usageReport.execute(context.principal, input),
@@ -289,6 +293,7 @@ export class PlatformRouter {
     updateReplicaSwitch: PlatformRouter.updateReplicaSwitch,
     listProjection: PlatformRouter.listProjection,
     assistantUsage: PlatformRouter.assistantUsage,
+    mailDeliveries: PlatformRouter.mailDeliveries,
     updateProjection: PlatformRouter.updateProjection,
     deleteTenant: PlatformRouter.deleteTenant,
     exportTenant: PlatformRouter.exportTenant,
