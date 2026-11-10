@@ -85,6 +85,7 @@ import {
   GetAssistantThreadUseCase,
   GetAssistantUsageReportUseCase,
   GetAssistantUsageUseCase,
+  GetConversationPresenceUseCase,
   GetConversationUseCase,
   GetDigestHourUseCase,
   GetDocPageUseCase,
@@ -243,6 +244,7 @@ import {
   RedisAssistantStreamSubscriber,
   RedisCacheStore,
   RedisConnection,
+  RedisPresenceReader,
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
@@ -610,6 +612,8 @@ export class Container {
   public readonly messaging: {
     readonly listConversations: ListConversationsUseCase;
     readonly getConversation: GetConversationUseCase;
+    // Who in a conversation has the app open, off the stream leases (`26.6`).
+    readonly presence: GetConversationPresenceUseCase;
     readonly createConversation: CreateConversationUseCase;
     readonly addMember: AddConversationMemberUseCase;
     readonly removeMember: RemoveConversationMemberUseCase;
@@ -1168,6 +1172,11 @@ export class Container {
         conversationAccess,
         messages,
         conversationNaming,
+      ),
+      presence: new GetConversationPresenceUseCase(
+        this.authorizer,
+        conversationAccess,
+        new RedisPresenceReader(() => this.redis.realtimeClient()),
       ),
       createConversation: new CreateConversationUseCase(
         this.authorizer,

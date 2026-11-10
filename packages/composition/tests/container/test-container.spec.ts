@@ -60,6 +60,7 @@ describe("TestContainer", () => {
       "outbox",
       "partitionArchive",
       "placed",
+      "presence",
       "queue",
       "rateLimits",
       "realtime",
