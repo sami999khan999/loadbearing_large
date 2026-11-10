@@ -41,6 +41,10 @@ export type {
 // question of. The shapes a component renders arrive through `@loadbearing/query`.
 export { ConversationEntity, Identifiers } from "@loadbearing/contracts";
 
+// ── @loadbearing/errors ──────────────────────────────────────────────────────
+// `route/-loader-error.ts` only: a loader's `NOT_FOUND` becomes the router's not-found.
+export { ErrorNormalizer } from "@loadbearing/errors";
+
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
   AccountPanel,
