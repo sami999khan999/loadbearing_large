@@ -70,10 +70,12 @@ async function signIn(email) {
 // Mailpit's text part ends each line in `\r`, which a link copied out of it keeps.
 async function verify(email) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const search = await fetch(`${mailpit}/api/v1/search?query=to:${email}`).then((r) => r.json());
+    const search = Object(
+      await fetch(`${mailpit}/api/v1/search?query=to:${email}`).then((r) => r.json()),
+    );
     const id = search.messages?.[0]?.ID;
     if (id) {
-      const message = await fetch(`${mailpit}/api/v1/message/${id}`).then((r) => r.json());
+      const message = Object(await fetch(`${mailpit}/api/v1/message/${id}`).then((r) => r.json()));
       const link = /https?:\/\/\S+verify\S+/.exec(message.Text ?? "")?.[0]?.trim();
       if (link) {
         await fetch(link, { redirect: "manual" });
@@ -112,7 +114,7 @@ async function rpc(cookie, path, body) {
     headers: { ...HEADERS, cookie },
     body: JSON.stringify({ json: body }),
   });
-  const payload = await response.json();
+  const payload = Object(await response.json());
   return response.ok ? { ok: payload.json } : { error: payload.json?.code ?? response.status };
 }
 
