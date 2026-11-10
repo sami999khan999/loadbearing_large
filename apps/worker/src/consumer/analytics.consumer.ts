@@ -399,7 +399,39 @@ export class AnalyticsConsumer {
     }
 
     const lagMs = await this.lagMs(organizationId, checkpoint, caughtUp, excluding, until);
-    return { projected, batches, lagMs };
+    const usage = await this.projectUsage(organizationId, budget - batches, until);
+    return { projected: projected + usage.projected, batches: batches + usage.batches, lagMs };
+  }
+
+  // The assistant's meter, walked the same way and inside the same shard scope, from what
+  // is left of the batch budget. No exclusion list: the policy rows name activity actions.
+  private async projectUsage(
+    organizationId: OrganizationId,
+    budget: number,
+    until: Date,
+  ): Promise<{ projected: number; batches: number }> {
+    const projector = this.container.usageProjector;
+    let checkpoint = await projector.checkpoint(organizationId);
+    let projected = 0;
+    let batches = 0;
+
+    while (batches < budget) {
+      const records = await this.container.assistantUsageRecords.since(
+        organizationId,
+        checkpoint,
+        AnalyticsConsumer.BATCH_SIZE,
+        until,
+      );
+      const last = records.at(-1);
+      if (!last) break;
+
+      projected += await projector.project(records);
+      batches += 1;
+      checkpoint = { lastOccurredAt: last.createdAt, lastId: last.id };
+      if (records.length < AnalyticsConsumer.BATCH_SIZE) break;
+    }
+
+    return { projected, batches };
   }
 
   // The age of the oldest row still unprojected, never the age of the newest projected

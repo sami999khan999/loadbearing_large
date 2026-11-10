@@ -1,9 +1,10 @@
-import type { ActivityRecord } from "@loadbearing/application";
+import type { ActivityRecord, AssistantUsageRecord } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import {
   FixedClock,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
+  InMemoryAssistantUsageProjector,
   InMemoryCacheStore,
   InMemoryColdArchiveReader,
   InMemoryOrganizationReader,
@@ -37,11 +38,51 @@ const record = (id: string, occurredAt: Date, action = "task.created"): Activity
   payload: {},
 });
 
+// The assistant's meter, walked in the same run. Keyset on `(createdAt, id)` like the
+// Postgres walk, so the projector's checkpoint is what moves it on.
+const usageOf = (rows: readonly AssistantUsageRecord[] = []) => ({
+  usageProjector: new InMemoryAssistantUsageProjector(),
+  assistantUsageRecords: {
+    since: (
+      organizationId: string,
+      after: { lastOccurredAt: Date | null; lastId: string | null },
+      limit: number,
+      until: Date,
+    ) =>
+      Promise.resolve(
+        rows
+          .filter((row) => row.organizationId === organizationId && row.createdAt <= until)
+          .filter(
+            (row) =>
+              after.lastOccurredAt === null ||
+              row.createdAt > after.lastOccurredAt ||
+              (row.createdAt.getTime() === after.lastOccurredAt.getTime() &&
+                row.id > (after.lastId ?? "")),
+          )
+          .slice(0, limit),
+      ),
+  },
+});
+
+const usageRow = (id: string, createdAt: Date): AssistantUsageRecord => ({
+  id,
+  organizationId: ORG as AssistantUsageRecord["organizationId"],
+  userId: ACTOR as AssistantUsageRecord["userId"],
+  threadId: "018f8c00-0000-7000-8000-000000000020",
+  messageId: "018f8c00-0000-7000-8000-000000000021",
+  model: "gpt-test",
+  inputTokens: 100,
+  outputTokens: 40,
+  createdAt,
+});
+
 function harness(
   records: readonly ActivityRecord[],
   excluded: readonly ActivityAction[] = [],
   projectionEnabled = true,
+  usageRows: readonly AssistantUsageRecord[] = [],
 ) {
+  const usage = usageOf(usageRows);
   const activityReplay = new InMemoryActivityReplayReader(records);
   const analyticsProjector = new InMemoryAnalyticsProjector();
   const coldArchive = new InMemoryColdArchiveReader();
@@ -59,6 +100,7 @@ function harness(
     // The consumer reads `container.projector`; the harness names the port after the
     // abstract class. Mapping it here is what keeps both names honest.
     projector: analyticsProjector,
+    ...usage,
     platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled }),
     projectionPolicies: new InMemoryProjectionPolicyRepository(
       excluded.map((action) => ({ action, projected: false, ttlMonths: null })),
@@ -71,6 +113,7 @@ function harness(
     consumer: new AnalyticsConsumer(container, undefined as never, 1),
     logger,
     projected: analyticsProjector,
+    usageProjected: usage.usageProjector,
     coldArchive,
     partitionArchive,
   };
@@ -105,6 +148,27 @@ describe("AnalyticsConsumer project", () => {
     // 90 minutes is well past `LAG_WARNING_MS`, so the old computation fired this every
     // run, forever, on a deployment where nothing was wrong.
     expect(emitted(logger, "analytics.projection.lagged")).toHaveLength(0);
+  });
+
+  it("projects the assistant's usage rows in the same run, once", async () => {
+    const rows = [usageRow("u1", minutesBefore(90)), usageRow("u2", minutesBefore(60))];
+    const { consumer, logger, usageProjected } = harness([], [], true, rows);
+
+    await consumer.handle(job("project"));
+    // A second run resumes from the projector's checkpoint and writes nothing new.
+    await consumer.handle(job("project"));
+
+    expect(usageProjected.projected().map((row) => row.id)).toEqual(["u1", "u2"]);
+    expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({ events: 2 });
+    expect(emitted(logger, "analytics.projection.completed")[1]).toMatchObject({ events: 0 });
+  });
+
+  it("leaves a usage row inside the settle horizon for the next run", async () => {
+    const { consumer, usageProjected } = harness([], [], true, [usageRow("u1", NOW)]);
+
+    await consumer.handle(job("project"));
+
+    expect(usageProjected.projected()).toHaveLength(0);
   });
 
   it("reports zero against an empty audit trail", async () => {
@@ -413,6 +477,7 @@ describe("AnalyticsConsumer — a tenant that cannot be placed", () => {
         ]),
       }),
       projector: analyticsProjector,
+      ...usageOf(),
       platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
       projectionPolicies: new InMemoryProjectionPolicyRepository([]),
       clock: new FixedClock(NOW),
@@ -504,6 +569,7 @@ describe("AnalyticsConsumer — the replica switch", () => {
         organizations: new InMemoryOrganizationReader(TENANTS),
       }),
       projector: analyticsProjector,
+      ...usageOf(),
       platformPolicy: new InMemoryPlatformPolicyRepository({ replicaReadsEnabled }),
       projectionPolicies: new InMemoryProjectionPolicyRepository([]),
       clock: new FixedClock(NOW),
@@ -559,6 +625,7 @@ describe("AnalyticsConsumer — where a run starts", () => {
         organizations: new InMemoryOrganizationReader([FIRST, SECOND, THIRD]),
       }),
       projector: analyticsProjector,
+      ...usageOf(),
       platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
       projectionPolicies: new InMemoryProjectionPolicyRepository([]),
       clock: new FixedClock(NOW),
@@ -595,6 +662,7 @@ describe("AnalyticsConsumer — where a run starts", () => {
         organizations: new InMemoryOrganizationReader(tenants),
       }),
       projector: new InMemoryAnalyticsProjector(),
+      ...usageOf(),
       platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
       projectionPolicies: new InMemoryProjectionPolicyRepository([]),
       clock: new FixedClock(NOW),
