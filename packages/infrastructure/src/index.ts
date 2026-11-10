@@ -14,6 +14,7 @@ export {
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
+export { AesGcmSecretCipher } from "./crypto/index.js";
 export {
   type GeminiAssistantConfig,
   GeminiAssistantModel,
@@ -54,6 +55,7 @@ export {
   PgInvitationClaimer,
   PgInvitationRepository,
   PgMailDeliveryRepository,
+  PgMailSettingsRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
@@ -115,5 +117,5 @@ export {
   S3StoragePolicyGateway,
   StorageKey,
 } from "./s3/index.js";
-export { type SmtpConfig, SmtpEmailSender } from "./smtp/index.js";
+export { type SmtpConfig, SmtpEmailSender, SmtpEmailSenderResolver } from "./smtp/index.js";
 export { UnifiedMarkdownRenderer } from "./unified/index.js";

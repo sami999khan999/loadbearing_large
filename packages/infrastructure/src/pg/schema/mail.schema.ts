@@ -1,4 +1,5 @@
 import {
+  boolean,
   check,
   index,
   integer,
@@ -42,3 +43,18 @@ export const mailDelivery = pgTable(
     check("mail_delivery_attempts_ck", sql`${t.attempts} >= 0`),
   ],
 );
+
+// One organization's mail server (`26.11`). The platform organization's row is the default;
+// any other overrides it for that tenant. Catalog, so the worker reads it for any tenant.
+export const mailSettings = pgTable("mail_settings", {
+  organizationId: uuid("organization_id").$type<OrganizationId>().primaryKey(),
+  host: text("host").notNull(),
+  port: integer("port").notNull(),
+  secure: boolean("secure").notNull(),
+  username: text("username"),
+  // AES-GCM under `MAIL_SECRET_KEY`. Write-only to a client: no read ever returns it.
+  passwordCiphertext: text("password_ciphertext"),
+  fromAddress: text("from_address").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).notNull(),
+  updatedBy: uuid("updated_by").$type<UserId>().notNull(),
+});

@@ -4,7 +4,13 @@
 // ── node ─────────────────────────────────────────────────────────────────────
 export { AsyncLocalStorage } from "node:async_hooks";
 export { Buffer } from "node:buffer";
-export { createHash, type Hash } from "node:crypto";
+export {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  type Hash,
+  randomBytes,
+} from "node:crypto";
 export { once } from "node:events";
 export { Readable } from "node:stream";
 export { pipeline } from "node:stream/promises";
@@ -119,6 +125,7 @@ export {
   type EmailMessage,
   type EmailReceipt,
   EmailSender,
+  EmailSenderResolver,
   EmbeddingProvider,
   type EmbeddingPurpose,
   type EntitlementRepository,
@@ -138,6 +145,8 @@ export {
   type MailDeliveryCursor,
   type MailDeliveryRecord,
   type MailDeliveryRepository,
+  type MailSettingsRecord,
+  type MailSettingsRepository,
   type MaintenanceGateway,
   // A value: the unified adapter extends it.
   MarkdownRenderer,
@@ -215,6 +224,7 @@ export {
   type RoleRecord,
   type RoleRepository,
   type SearchHit,
+  SecretCipher,
   Shard,
   type ShardAssignment,
   type ShardAssignmentRepository,

@@ -19,6 +19,7 @@ export { PgFlagRepository } from "./pg-flag.repository.js";
 export { PgInvitationClaimer } from "./pg-invitation.claimer.js";
 export { PgInvitationRepository } from "./pg-invitation.repository.js";
 export { PgMailDeliveryRepository } from "./pg-mail-delivery.repository.js";
+export { PgMailSettingsRepository } from "./pg-mail-settings.repository.js";
 export { PgMaintenanceGateway } from "./pg-maintenance.gateway.js";
 export { PgMemberRepository } from "./pg-member.repository.js";
 export { PgMembershipReader } from "./pg-membership.reader.js";
