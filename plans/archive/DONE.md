@@ -2000,10 +2000,18 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   `pnpm dev` alice saved a server for carol's org, the row held ciphertext only, and carol's
   invitation arrived in Mailpit from that org's sender.
 
+- [x] `26.6` **A cluster-wide stream cap, and presence from open streams** `done: 2026-11-11` —
+  each stream holds a lease in a per-owner sorted set (`StreamLease`), renewed while open and
+  expiring after ninety seconds, so `REALTIME_MAX_STREAMS_PER_USER` holds across every realtime
+  process. Presence is "holds a live lease": `conversation.presence` for a conversation's
+  members, shown as "Online now" on the conversation page. **Proof:** lease and presence specs;
+  against `pnpm dev`, bob saw carol online while her stream was open and not after it closed.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-11 | @sami | **`26.6` closed:** stream leases hold the cap across processes, and give presence |
 | 2026-11-11 | @sami | **`26.11` closed:** per-tenant SMTP with a platform default, passwords encrypted |
 | 2026-11-11 | @sami | **`26.10` closed:** the mail delivery log and the platform Mail page |
 | 2026-11-11 | @sami | **`RV.3` closed:** per-member fan-out frames skip the replay log; a reopen refetches the lists |
