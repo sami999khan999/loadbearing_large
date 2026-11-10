@@ -37,7 +37,11 @@ afterAll(async () => {
 
 const AUTHOR = Identifiers.userId.parse(Uuid.v7());
 const OTHER = Identifiers.userId.parse(Uuid.v7());
-const at = (minutes: number) => new Date(Date.UTC(2026, 9, 14, 0, minutes));
+// The first of the current UTC month, which always has a partition: a fixed day stops
+// having one on a fresh database once the runway has moved past it.
+const now = new Date();
+const at = (minutes: number) =>
+  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, minutes));
 
 const thread = (organizationId: never, authorId = AUTHOR, minutes = 0) => ({
   id: Uuid.v7(),
