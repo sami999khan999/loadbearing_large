@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  AssistantUsageReportPanel,
   Can,
   type ClientNamespace,
   PLATFORM_ROUTE_PERMISSION,
@@ -55,6 +56,7 @@ function PlatformAnalytics() {
       <h1>{t("platform.projection.title")}</h1>
       <Can permission="platform.analytics.read" capabilities={capabilities}>
         <ProjectionSwitchPanel auditMonths={auditMonths} />
+        <AssistantUsageReportPanel />
       </Can>
       <Can permission="platform.analytics.manage" capabilities={capabilities}>
         <ProjectionGapsPanel />

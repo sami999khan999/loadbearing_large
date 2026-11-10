@@ -193,6 +193,11 @@ export class PlatformRouter {
     },
   );
 
+  public static readonly assistantUsage = authed.platform.assistantUsage.handler(
+    ({ input, context }) =>
+      context.container.assistant.usageReport.execute(context.principal, input),
+  );
+
   public static readonly listProjection = authed.platform.listProjection.handler(({ context }) =>
     context.container.platformAdmin.listProjection.execute(context.principal),
   );
@@ -283,6 +288,7 @@ export class PlatformRouter {
     updateProjectionSwitch: PlatformRouter.updateProjectionSwitch,
     updateReplicaSwitch: PlatformRouter.updateReplicaSwitch,
     listProjection: PlatformRouter.listProjection,
+    assistantUsage: PlatformRouter.assistantUsage,
     updateProjection: PlatformRouter.updateProjection,
     deleteTenant: PlatformRouter.deleteTenant,
     exportTenant: PlatformRouter.exportTenant,

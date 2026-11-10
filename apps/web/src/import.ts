@@ -55,6 +55,8 @@ export {
   AssistantQuestionForm,
   AssistantThreadList,
   AssistantThreadPanel,
+  AssistantUsagePanel,
+  AssistantUsageReportPanel,
   ChangeEmailForm,
   ChangePasswordForm,
   ConversationList,
