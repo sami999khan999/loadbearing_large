@@ -174,8 +174,8 @@ the word. Every name below is `assistant`.
   `/assistant` (`assistant.usage`) for the new key `ai.usage.read`, granted to `admin` by the seed
   and by migration `0058`. **Tokens only, no cost:** nothing in the kit knows a model's price, so
   pricing is an owner decision. Checked live: carol's fake answer metered 62 + 11 tokens, the
-  projection copied every `ai_usage` row, and the real reader returned them. **The platform panel
-  was not opened in a browser**, since no platform admin could sign in on this machine.
+  projection copied every `ai_usage` row, and the real reader returned them. The platform panel
+  server-renders its rows for alice and refuses bob with `FORBIDDEN`, checked over HTTP.
   - Project `ai_usage` into ClickHouse beside `clickhouse-analytics.projector.ts`.
   - A platform **AI usage** panel on the analytics page: tokens and cost by organization, model and
     day.
