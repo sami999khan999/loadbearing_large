@@ -25,6 +25,13 @@ export const platformPermissions = {
     module: "platform",
     label: "View mail deliveries",
   },
+  // The platform's default mail server and each tenant's override (`26.11`).
+  "platform.mail.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Change mail servers",
+    requires: ["platform.mail.read"],
+  },
   "platform.analytics.read": {
     scope: "platform",
     module: "platform",
