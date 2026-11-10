@@ -1,5 +1,7 @@
 export { CountUnreadNotificationsUseCase } from "./count-unread-notifications.use-case.js";
 export { DeliverNotificationUseCase } from "./deliver-notification.use-case.js";
+export { DigestHour } from "./digest-hour.js";
+export { GetDigestHourUseCase } from "./get-digest-hour.use-case.js";
 export {
   GetNotificationPreferencesUseCase,
   type ResolvedPreference,
@@ -33,8 +35,10 @@ export {
   NotificationRecipientReader,
   type Recipient,
 } from "./notification-recipient.reader.js";
+export { NotificationSettingsRepository } from "./notification-settings.repository.js";
 export {
   type SendNotificationDigestInput,
   SendNotificationDigestUseCase,
 } from "./send-notification-digest.use-case.js";
+export { UpdateDigestHourUseCase } from "./update-digest-hour.use-case.js";
 export { UpdateNotificationPreferenceUseCase } from "./update-notification-preference.use-case.js";

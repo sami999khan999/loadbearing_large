@@ -34,6 +34,8 @@ const CATALOG = Object.freeze([
   "worker_queue_settings",
   // A tenant's mail server (`26.11`): read by the worker for any tenant, written rarely.
   "mail_settings",
+  // When each tenant's digest goes out (`26.7`): read by the hourly fan-out before it places one.
+  "notification_settings",
   // Deployment-wide switches, read before a request knows its shard.
   "feature_flags",
   "feature_flag_organizations",

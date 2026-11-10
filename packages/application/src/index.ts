@@ -247,6 +247,8 @@ export {
   type ArchivedMonth,
   CountUnreadNotificationsUseCase,
   DeliverNotificationUseCase,
+  DigestHour,
+  GetDigestHourUseCase,
   GetNotificationPreferencesUseCase,
   type ListArchivedNotificationsInput,
   ListArchivedNotificationsUseCase,
@@ -260,6 +262,7 @@ export {
   NotificationRecipientReader,
   type NotificationRecord,
   NotificationRepository,
+  NotificationSettingsRepository,
   NotificationSubscriber,
   type PolicyRow,
   type PreferenceRecord,
@@ -268,6 +271,7 @@ export {
   type SendNotificationDigestInput,
   SendNotificationDigestUseCase,
   type UnreadQuery,
+  UpdateDigestHourUseCase,
   UpdateNotificationPreferenceUseCase,
 } from "./notification/index.js";
 export {

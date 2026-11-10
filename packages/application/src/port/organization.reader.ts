@@ -13,6 +13,16 @@ export abstract class OrganizationReader {
     onNode?: number,
   ): Promise<readonly OrganizationId[]>;
 
+  // A page of the tenants whose digest is due this UTC hour (`26.7`), on one node: a
+  // tenant with no setting is due at `defaultHour`.
+  public abstract pageDueForDigest(
+    after: OrganizationId | null,
+    limit: number,
+    onNode: number,
+    hour: number,
+    defaultHour: number,
+  ): Promise<readonly OrganizationId[]>;
+
   // For the copy a person reads. The digest's footer said "you belong to
   // 018f8c00-0000-…" because the id was the only thing the use-case held.
   public abstract nameOf(organizationId: OrganizationId): Promise<string | null>;
