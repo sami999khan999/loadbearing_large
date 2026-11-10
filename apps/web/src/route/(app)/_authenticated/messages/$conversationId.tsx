@@ -62,7 +62,13 @@ function Conversation() {
       <PresenceNotice conversationId={conversationId} nameFor={nameFor} selfId={user?.id} />
       <MessageList conversationId={conversationId} nameFor={nameFor} />
       <TypingNotice typing={typing} nameFor={nameFor} />
-      <MessageComposer conversationId={conversationId} />
+      <MessageComposer
+        conversationId={conversationId}
+        mentionable={(entity?.othersThan(user?.id ?? "") ?? []).map((member) => ({
+          userId: member.userId,
+          name: member.name,
+        }))}
+      />
     </main>
   );
 }
