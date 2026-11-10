@@ -2,7 +2,7 @@ import { SendMailUseCase } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import { RecordingEmailSender, StubMailRenderer, TestContainer } from "@loadbearing/composition";
 import type { Job } from "bullmq";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MailConsumer } from "../../src/consumer/mail.consumer.js";
 
 // `TestContainer` rather than an object literal, for the reason the maintenance spec
@@ -60,5 +60,65 @@ describe("MailConsumer", () => {
     await expect(consumerFor(container).handle(send({ url: "not-a-url" }))).rejects.toThrow();
 
     expect(email.sent()).toEqual([]);
+  });
+
+  // `26.10`: the outcome is written after the send, on the tenant's shard, and a write that
+  // fails is a log line, never a rejected job that would send the mail twice.
+  describe("the delivery log", () => {
+    const PLATFORM = "018f8c00-0000-7000-8000-000000000001";
+
+    const recording = (fail = false) => {
+      const email = new RecordingEmailSender();
+      const recorded: unknown[] = [];
+      const placedOn: string[] = [];
+      const failures: unknown[] = [];
+      const container = {
+        ...TestContainer.build({ email }),
+        logger: { emit: vi.fn(), failure: (error: unknown) => failures.push(error) },
+        placed: (principal: { organizationId: string }, work: () => Promise<unknown>) => {
+          placedOn.push(principal.organizationId);
+          return work();
+        },
+        mail: {
+          send: new SendMailUseCase(new StubMailRenderer(), email),
+          record: {
+            tenantOf: (organizationId: string | null) =>
+              Promise.resolve(organizationId ?? PLATFORM),
+            execute: (input: unknown) => {
+              if (fail) return Promise.reject(new Error("database down"));
+              recorded.push(input);
+              return Promise.resolve();
+            },
+          },
+        },
+      } as unknown as Container;
+      return { container, email, recorded, placedOn, failures };
+    };
+
+    it("records a sent message under the platform when it names no tenant", async () => {
+      const { container, recorded, placedOn } = recording();
+
+      await consumerFor(container).handle({ ...send(), attemptsMade: 0 } as Job);
+
+      expect(placedOn).toEqual([PLATFORM]);
+      expect(recorded).toEqual([
+        expect.objectContaining({
+          organizationId: PLATFORM,
+          template: "auth.verify",
+          to: "a@example.test",
+          status: "sent",
+          attempts: 1,
+        }),
+      ]);
+    });
+
+    it("still succeeds when the row cannot be written, and says so", async () => {
+      const { container, email, failures } = recording(true);
+
+      await expect(consumerFor(container).handle(send())).resolves.toBeUndefined();
+
+      expect(email.sent()).toHaveLength(1);
+      expect(failures).toHaveLength(1);
+    });
   });
 });
