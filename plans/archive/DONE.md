@@ -1991,10 +1991,20 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   address. **Proof:** use-case, consumer and repository specs; against `pnpm dev` a sign-up's
   verification mail appeared as `sent` with its server message id for alice.
 
+- [x] `26.11` **SMTP configurable from the dashboard** `done: 2026-11-11` — `mail_settings`, a
+  catalog row per organization: the platform organization's is the default, any other overrides
+  it. `auth.*` always uses the platform sender. Passwords are AES-256-GCM under `MAIL_SECRET_KEY`
+  behind `SecretCipher`, write-only, and absent from the audit row. `SmtpEmailSenderResolver`
+  keeps one pool per server. Edited on the platform **Mail** page (`platform.mail.manage`).
+  **Proof:** specs for the sender order, the save rules, the cipher and the resolver; against
+  `pnpm dev` alice saved a server for carol's org, the row held ciphertext only, and carol's
+  invitation arrived in Mailpit from that org's sender.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-11 | @sami | **`26.11` closed:** per-tenant SMTP with a platform default, passwords encrypted |
 | 2026-11-11 | @sami | **`26.10` closed:** the mail delivery log and the platform Mail page |
 | 2026-11-11 | @sami | **`RV.3` closed:** per-member fan-out frames skip the replay log; a reopen refetches the lists |
 | 2026-11-10 | @sami | **`AI.4` closed:** a loader's `FORBIDDEN` renders the not-found page |

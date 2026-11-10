@@ -30,7 +30,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 1 | 48 |
-| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 7 | 2 |
+| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 6 | 3 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 1 | 8 |
@@ -140,9 +140,6 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 
 ### Email
 
-- [ ] `26.11` **SMTP configurable from the dashboard** — a platform default plus a per-tenant
-  override, `auth.*` always on the platform sender, passwords under `MAIL_SECRET_KEY`. The pooled
-  sender (`CP4.7`) becomes one pool per sender. — `archive/COMMUNICATION.md:37`
 ### Notifications
 
 - [ ] `26.3` **Web push** — whole or not at all, a third channel in the preference grid.
