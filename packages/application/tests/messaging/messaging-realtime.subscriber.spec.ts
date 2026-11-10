@@ -144,6 +144,23 @@ describe("MessagingRealtimeSubscriber", () => {
     expect(userFrame?.message).toMatchObject({ payload: { conversationId: CONVERSATION } });
   });
 
+  // `RV.3`: one log per member per message was the cost; the room's own frame stays logged.
+  it("keeps each member's frame out of the replay log, and logs the room's", async () => {
+    const { subscriber, realtime } = harness();
+    await subscriber.handle(eventOf("message.sent"));
+
+    const user = realtime.sent.filter((frame) => frame.channel.includes(":user:"));
+    const room = realtime.sent.filter((frame) => !frame.channel.includes(":user:"));
+
+    expect(user.length).toBeGreaterThan(0);
+    expect(
+      user.every((frame) => frame.message.kind === "event" && frame.message.replay === false),
+    ).toBe(true);
+    expect(
+      room.every((frame) => frame.message.kind === "event" && frame.message.replay === undefined),
+    ).toBe(true);
+  });
+
   it("ignores an event with no conversation in its payload", async () => {
     const { subscriber, realtime } = harness();
     await subscriber.handle({
