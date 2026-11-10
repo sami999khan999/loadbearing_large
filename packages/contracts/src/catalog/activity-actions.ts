@@ -2,6 +2,7 @@ import { aiActions } from "./ai.actions.js";
 import { apiKeyActions } from "./apikey.actions.js";
 import { docActions } from "./doc.actions.js";
 import { memberActions } from "./member.actions.js";
+import { notificationActions } from "./notification.actions.js";
 import { overrideActions } from "./override.actions.js";
 import { platformActions } from "./platform.actions.js";
 import { roleActions } from "./role.actions.js";
@@ -18,4 +19,5 @@ export const ACTIVITY_ACTIONS = {
   ...platformActions,
   ...widgetActions,
   ...docActions,
+  ...notificationActions,
 } as const;

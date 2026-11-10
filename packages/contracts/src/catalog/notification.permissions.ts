@@ -11,4 +11,6 @@ export const notificationProcedurePermissions = {
   "notification.markAllRead": "notification.inbox.update",
   "notification.preferences": "notification.inbox.read",
   "notification.updatePreference": "notification.preference.update",
+  "notification.digestHour": "notification.inbox.read",
+  "notification.updateDigestHour": "notification.digest.manage",
 } as const satisfies Record<string, PermissionKey>;

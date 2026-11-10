@@ -16,6 +16,9 @@ const channel = z.enum(["in_app", "email"]);
 const mode = z.enum(["immediate", "digest", "off"]);
 
 export class NotificationContract {
+  // The UTC hour this tenant's daily digest goes out at (`26.7`). 7 until someone changes it.
+  public static readonly digestHour = z.object({ hour: z.number().int().min(0).max(23) });
+
   private constructor() {}
 
   public static readonly kind = kind;

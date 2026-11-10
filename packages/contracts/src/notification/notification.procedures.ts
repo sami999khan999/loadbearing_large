@@ -49,6 +49,15 @@ export class NotificationProcedures {
 
   // The object the merge point in `procedure/index.ts` mounts. One place to add a
   // procedure to, rather than two.
+  public static readonly digestHour = oc
+    .route({ method: "GET", path: "/notifications/digest-hour" })
+    .output(NotificationContract.digestHour);
+
+  public static readonly updateDigestHour = oc
+    .route({ method: "PUT", path: "/notifications/digest-hour" })
+    .input(NotificationContract.digestHour)
+    .output(NotificationContract.digestHour);
+
   public static readonly all = {
     list: NotificationProcedures.list,
     archived: NotificationProcedures.archived,
@@ -58,5 +67,7 @@ export class NotificationProcedures {
     markAllRead: NotificationProcedures.markAllRead,
     preferences: NotificationProcedures.preferences,
     updatePreference: NotificationProcedures.updatePreference,
+    digestHour: NotificationProcedures.digestHour,
+    updateDigestHour: NotificationProcedures.updateDigestHour,
   } as const;
 }
