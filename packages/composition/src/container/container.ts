@@ -188,6 +188,7 @@ import {
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgMessageReactionRepository,
   PgMessageRepository,
   PgNotificationPreferenceRepository,
   PgNotificationRecipientReader,
@@ -231,6 +232,7 @@ import {
   QueueName,
   type QueuePublisher,
   type RateLimitStore,
+  ReactToMessageUseCase,
   ReadDocNavUseCase,
   ReadDocPageUseCase,
   ReadPlatformDocNavUseCase,
@@ -621,6 +623,7 @@ export class Container {
     readonly rename: RenameConversationUseCase;
     readonly markRead: MarkConversationReadUseCase;
     readonly listMessages: ListMessagesUseCase;
+    readonly react: ReactToMessageUseCase;
     readonly send: SendMessageUseCase;
     readonly edit: EditMessageUseCase;
     readonly remove: DeleteMessageUseCase;
@@ -1159,6 +1162,11 @@ export class Container {
       new PgUserReader(this.cluster, this.transactions, this.shards),
     );
 
+    const messageReactions = new PgMessageReactionRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
     this.messaging = {
       listConversations: new ListConversationsUseCase(
         this.authorizer,
@@ -1222,7 +1230,18 @@ export class Container {
         this.realtime,
         this.routedUnitOfWork,
       ),
-      listMessages: new ListMessagesUseCase(this.authorizer, conversationAccess, messages),
+      listMessages: new ListMessagesUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        messageReactions,
+      ),
+      react: new ReactToMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        messageReactions,
+        this.realtime,
+      ),
       send: new SendMessageUseCase(
         this.authorizer,
         conversationAccess,
