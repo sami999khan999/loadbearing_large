@@ -37,4 +37,7 @@ export const messaging = {
   // Who has the app open, under the title (`26.6`). Names, then a comma list.
   "messaging.presence.online": "Online now: {names}",
   "messaging.compose.mention": "Mention…",
+  // Reactions (`26.1`): a label and a count, because `Translator` does not pluralise.
+  "messaging.reaction.add": "React",
+  "messaging.reaction.toggle": "{emoji} reactions: {count}",
 } as const;
