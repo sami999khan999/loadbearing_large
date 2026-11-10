@@ -32,4 +32,5 @@ export const messaging = {
   "messaging.typing.one": "{name} লিখছেন…",
   "messaging.typing.many": "একাধিক জন লিখছেন…",
   "messaging.presence.online": "এখন অনলাইনে: {names}",
+  "messaging.compose.mention": "উল্লেখ করুন…",
 } as const;

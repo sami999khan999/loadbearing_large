@@ -36,4 +36,5 @@ export const messaging = {
   "messaging.typing.many": "Several people are typing…",
   // Who has the app open, under the title (`26.6`). Names, then a comma list.
   "messaging.presence.online": "Online now: {names}",
+  "messaging.compose.mention": "Mention…",
 } as const;

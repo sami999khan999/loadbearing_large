@@ -58,4 +58,6 @@ export const notification = {
   "notification.digestHour.readOnly": "This organization's daily digest goes out at {time}.",
   // A grouped item, beside its title: one bell item for several events (`26.7`).
   "notification.grouped": "{count} new",
+  "notification.kind.message.mentioned.title": "You were mentioned",
+  "notification.kind.message.mentioned.body": "Someone mentioned you in a conversation.",
 } as const;
