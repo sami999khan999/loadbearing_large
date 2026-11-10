@@ -51,4 +51,9 @@ export const notification = {
   "notification.preference.mode.digest": "Once a day",
   "notification.preference.mode.off": "Off",
   "notification.preference.saved": "Saved.",
+  // ── the digest hour (`26.7`) ──
+  "notification.digestHour.title": "Daily digest",
+  "notification.digestHour.label": "Send the organization's digest at",
+  "notification.digestHour.hint": "In UTC. Everyone in this organization gets theirs at this hour.",
+  "notification.digestHour.readOnly": "This organization's daily digest goes out at {time}.",
 } as const;

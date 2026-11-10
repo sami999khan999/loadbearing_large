@@ -41,4 +41,8 @@ export const notification = {
   "notification.preference.mode.digest": "দিনে একবার",
   "notification.preference.mode.off": "বন্ধ",
   "notification.preference.saved": "সংরক্ষণ করা হয়েছে।",
+  "notification.digestHour.title": "দৈনিক সারসংক্ষেপ",
+  "notification.digestHour.label": "প্রতিষ্ঠানের সারসংক্ষেপ পাঠানো হবে",
+  "notification.digestHour.hint": "UTC সময়ে। এই প্রতিষ্ঠানের সবাই এই সময়ে তাদেরটি পান।",
+  "notification.digestHour.readOnly": "এই প্রতিষ্ঠানের দৈনিক সারসংক্ষেপ {time}-এ যায়।",
 } as const;
