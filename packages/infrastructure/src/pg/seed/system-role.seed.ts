@@ -72,6 +72,7 @@ const ROLES: readonly SystemRole[] = Object.freeze([
       "widget.default.manage",
       ...DOC_AUTHOR,
       "ai.assistant.use",
+      "ai.usage.read",
     ],
   },
   {

@@ -4,6 +4,7 @@ import {
   eq,
   exists,
   gt,
+  inArray,
   type OrganizationId,
   type OrganizationReader,
   type Placement,
@@ -48,6 +49,18 @@ export class PgOrganizationReader extends BaseRepository implements Organization
       .limit(1);
 
     return rows[0]?.name ?? null;
+  }
+
+  public async namesOf(
+    organizationIds: readonly OrganizationId[],
+  ): Promise<ReadonlyMap<OrganizationId, string>> {
+    if (organizationIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(inArray(organizations.id, [...organizationIds]));
+
+    return new Map(rows.map((row) => [row.id, row.name]));
   }
 
   // A correlated `EXISTS` rather than a join, so the projection and the keyset stay

@@ -9,6 +9,8 @@ export { type CannedAssistantConfig, CannedAssistantModel } from "./canned/index
 export {
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
+  ClickHouseAssistantUsageProjector,
+  ClickHouseAssistantUsageReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
