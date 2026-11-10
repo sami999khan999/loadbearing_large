@@ -44,6 +44,9 @@ const Schema = z
     // rather than optional.
     SMTP_URL: z.string().min(1),
     EMAIL_FROM: z.string().min(1),
+    // 32 bytes, base64, for SMTP passwords saved from the platform Mail page (`26.11`).
+    // Never derived from AUTH_SECRET: rotating that must not break every tenant's mail.
+    MAIL_SECRET_KEY: z.string().min(1).optional(),
     // Required here too, and this is the process that needs it: the worker renders the
     // invitation link, and it parses no auth configuration to borrow an origin from.
     APP_BASE_URL: z.url(),
@@ -349,7 +352,12 @@ export class Env {
             ? { storageClass: e.S3_COLD_STORAGE_CLASS, afterDays: e.S3_COLD_TRANSITION_DAYS }
             : undefined,
       },
-      email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
+      email: {
+        url: e.SMTP_URL,
+        from: e.EMAIL_FROM,
+        baseUrl: e.APP_BASE_URL,
+        ...(e.MAIL_SECRET_KEY ? { secretKey: e.MAIL_SECRET_KEY } : {}),
+      },
       embedding: {
         provider: e.EMBEDDING_PROVIDER,
         dimensions: e.EMBEDDING_DIMENSIONS,

@@ -94,6 +94,7 @@ export class MailConsumer {
             to: job.data.to,
             locale: job.data.locale as never,
             params: job.data.params,
+            organizationId: (job.data.organizationId ?? null) as OrganizationId | null,
           });
 
           // The id a provider webhook would later correlate against, which is the whole
