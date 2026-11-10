@@ -117,6 +117,7 @@ import {
   ListDocSpacesUseCase,
   ListFlagsUseCase,
   ListInvitationsUseCase,
+  ListMailDeliveriesUseCase,
   ListMembersUseCase,
   ListMessagesUseCase,
   ListModuleSwitchesUseCase,
@@ -177,6 +178,7 @@ import {
   PgFlagRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
+  PgMailDeliveryRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
@@ -229,6 +231,7 @@ import {
   type RealtimePublisher,
   type RealtimeSubscriber,
   ReclaimMoveSourcesUseCase,
+  RecordMailDeliveryUseCase,
   RedisAssistantBudgetStore,
   RedisAssistantStreamPublisher,
   RedisAssistantStreamSubscriber,
@@ -547,7 +550,12 @@ export class Container {
   };
   // Outside the `auth` block on purpose. The worker is the process that sends mail and it
   // has no auth config — which is exactly what building the old mailer in there got wrong.
-  public readonly mail: { readonly send: SendMailUseCase };
+  public readonly mail: {
+    readonly send: SendMailUseCase;
+    // The delivery log (`26.10`): written by the consumer, read on the platform Mail page.
+    readonly record: RecordMailDeliveryUseCase;
+    readonly deliveries: ListMailDeliveriesUseCase;
+  };
   public readonly analytics: {
     readonly activity: GetActivityTrendUseCase;
   };
@@ -950,7 +958,6 @@ export class Container {
     this.email = this.emailSender;
     this.mailPublisher = new QueuedMailPublisher(this.queue, this.logger);
     this.mailRenderer = new ContentMailRenderer(this.content, config.email.baseUrl);
-    this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
     const capabilityRepository = new PgCapabilityRepository(
       this.cluster,
@@ -958,6 +965,16 @@ export class Container {
       this.shards,
     );
     this.platform = new PgPlatformReader(this.cluster, this.transactions, this.shards);
+    const mailDeliveries = new PgMailDeliveryRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    this.mail = {
+      send: new SendMailUseCase(this.mailRenderer, this.email),
+      record: new RecordMailDeliveryUseCase(mailDeliveries, this.platform, this.clock),
+      deliveries: new ListMailDeliveriesUseCase(this.authorizer, mailDeliveries),
+    };
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache, this.platform);
 
     // Shares the transaction scope, which is what makes the audit row commit with the

@@ -1,6 +1,6 @@
 ---
 title: The mail pipeline
-description: Why every message is a queue job, why auth mail goes through it too, why there is no delivery table, and where the delivery record actually lives.
+description: Why every message is a queue job, why auth mail goes through it too, why delivery is never tracked as state, and the append-only delivery log that records outcomes.
 ---
 
 # The mail pipeline
@@ -60,7 +60,7 @@ hours. The one path past it is `pnpm queue:replay` on a job failed more than a d
 operator runs on purpose. The cost is one small key per keyed message for a day, on the queue
 instance.
 
-## There is no delivery table, and that is a decision
+## No delivery state, and that is a decision
 
 An earlier draft of this design wrote every outgoing message to a partitioned `mail_deliveries`
 table with `status` and `attempts` columns before queueing it. That was removed, for three reasons
@@ -76,19 +76,29 @@ that compound:
    only `token_hash`, so that a dump of that table holds nothing anyone can accept an invitation
    with. A mail table carrying the rendered link would hand it straight back.
 
-A dedicated mail log is something an application adds for a stated reason — regulated retention, an
-in-app resend history, a provider whose own log expires before the question arrives — not as a
-default. The trigger for building one is written down as `C6.10` in
-[`plans/archive/COMMUNICATION-PLAN.md`](../../../../plans/archive/COMMUNICATION-PLAN.md).
+A dedicated mail log is something an application adds for a stated reason, and `26.10` added one
+when "was this sent?" stopped being answerable from the log lines below: tenant SMTP puts mail on
+hosts nobody here can read. It is **not** the table the three reasons rule out:
+
+- **`mail_delivery` is written after the outcome, by the consumer, and never read by the send path.**
+  There is no `status` the queue's retries could disagree with: a row is a fact, sent or failed on
+  the last attempt.
+- **It holds no params.** Template, lower-cased recipient, outcome, attempts and the server's
+  message id. No rendered link, so no invitation token reaches Postgres.
+- **A row that cannot be written is a logged failure**, never a rejected job, which would send the
+  mail twice. Mail with no tenant is filed under the platform organization.
+
+It is partitioned like every growing table, kept thirteen months, and read on the platform **Mail**
+page one tenant at a time.
 
 **The outbox event table is the deliberate exception**, and the distinction is the whole point:
 Redis cannot commit atomically with Postgres, so an event published from Redis can fire for a change
 that rolled back, or vanish if the process dies in between. That is the one place the database write
 is load-bearing. A mail request is not — nothing reads it back.
 
-## So where is the delivery record?
+## The log lines beside it
 
-Three log lines, and they are the answer to "was it sent":
+Three log lines, which answer "was it sent" from Loki within its retention:
 
 | Event | Level | Emitted by | Carries |
 |---|---|---|---|
