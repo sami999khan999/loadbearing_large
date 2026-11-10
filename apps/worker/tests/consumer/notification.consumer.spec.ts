@@ -16,7 +16,12 @@ const tenantsOn: Record<number, readonly string[]> = {
 
 const harness = () => {
   const queue = new RecordingQueuePublisher();
-  const pages: { node: number | undefined; after: string | null }[] = [];
+  const pages: {
+    node: number | undefined;
+    after: string | null;
+    hour?: number;
+    defaultHour?: number;
+  }[] = [];
   const batches: number[] = [];
   const publishMany = queue.publishMany.bind(queue);
   queue.publishMany = (name, jobs) => {
@@ -33,8 +38,14 @@ const harness = () => {
       for (const node of [0, 1]) await work(node);
     },
     organizations: {
-      page: (after: string | null, limit: number, node?: number) => {
-        pages.push({ node, after });
+      pageDueForDigest: (
+        after: string | null,
+        limit: number,
+        node: number,
+        hour: number,
+        defaultHour: number,
+      ) => {
+        pages.push({ node, after, hour, defaultHour });
         const all = tenantsOn[node ?? 0] ?? [];
         const start = after === null ? 0 : all.indexOf(after) + 1;
         return Promise.resolve(all.slice(start, start + limit));
@@ -57,6 +68,10 @@ describe("NotificationConsumer fan-out", () => {
     expect(jobs).toHaveLength(502);
     expect(jobs[0]?.options?.jobId).toBe("digest_org-0-0000_2026-09-26");
     expect(pages.map((page) => page.node)).toEqual([0, 0, 1]);
+    // `26.7`: only the tenants due this UTC hour, and 07:00 for one that never chose.
+    expect(pages.every((page) => page.hour === NOW.getUTCHours() && page.defaultHour === 7)).toBe(
+      true,
+    );
     expect(batches).toEqual([500, 1, 1]);
   });
 });
