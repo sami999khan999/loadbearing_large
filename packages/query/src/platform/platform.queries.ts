@@ -1,5 +1,5 @@
 import type { ApiClient, OrganizationId, ShardMapQuery, TenantStorageQuery } from "../import.js";
-import { queryOptions } from "../import.js";
+import { infiniteQueryOptions, queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
 export class PlatformQueries {
@@ -143,6 +143,26 @@ export class PlatformQueries {
       queryKey: QueryKeys.platform.modules(),
       queryFn: () => client.platform.moduleSwitches(),
       staleTime: 10_000,
+    });
+  }
+
+  // A page of one tenant's mail outcomes. Thirty seconds: support is asking about now.
+  public static mailDeliveries(
+    client: ApiClient,
+    params: {
+      readonly organizationId: OrganizationId;
+      readonly recipient?: string;
+      readonly limit: number;
+    },
+  ) {
+    return infiniteQueryOptions({
+      queryKey: QueryKeys.platform.mailDeliveries(params),
+      queryFn: ({ pageParam }) =>
+        client.platform.mailDeliveries({ ...params, ...(pageParam ? { cursor: pageParam } : {}) }),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (last: { readonly nextCursor: string | null }) =>
+        last.nextCursor ?? undefined,
+      staleTime: 30_000,
     });
   }
 
