@@ -2285,7 +2285,13 @@ export class Container {
         this.catalogUnitOfWork,
       ),
       rerender: new DocRerender(pages, renderer, cache, uow),
-      imageOrphans: new DocImageOrphans(pages, this.storage, this.clock),
+      imageOrphans: new DocImageOrphans(
+        pages,
+        this.storage,
+        this.clock,
+        this.partitionArchive,
+        this.coldArchive,
+      ),
       reindex: new ReindexDocsUseCase(auth, spaces, pages, this.documentIndex, this.clock),
     };
   }
