@@ -1,4 +1,5 @@
 export { AccountPanel } from "./account.panel.js";
+export { AssistantUsageReportPanel } from "./assistant-usage-report.panel.js";
 export { DeleteTenantPanel } from "./delete-tenant.panel.js";
 export { FlagList } from "./flag.list.js";
 export { ModuleSwitchPanel } from "./module-switch.panel.js";

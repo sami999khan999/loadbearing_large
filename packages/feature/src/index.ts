@@ -30,6 +30,7 @@ export {
   type AssistantThreadListProps,
   AssistantThreadPanel,
   type AssistantThreadPanelProps,
+  AssistantUsagePanel,
 } from "./assistant/index.js";
 export {
   ForgotPasswordForm,
@@ -134,6 +135,7 @@ export {
 } from "./organization/index.js";
 export {
   AccountPanel,
+  AssistantUsageReportPanel,
   DeleteTenantPanel,
   FlagList,
   ModuleSwitchPanel,

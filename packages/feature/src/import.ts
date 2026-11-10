@@ -32,6 +32,7 @@ export {
   type AssistantMessageDto,
   type AssistantSourceDto,
   type AssistantThreadDto,
+  type AssistantUsageReportDto,
   type CapabilitiesDto,
   type ColdModeDto,
   type ConversationDto,
