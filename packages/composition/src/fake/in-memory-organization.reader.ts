@@ -29,6 +29,14 @@ export class InMemoryOrganizationReader extends OrganizationReader {
     return Promise.resolve(new Map(named));
   }
 
+  // Every tenant is due: a spec about the fan-out passes the hour it means through its clock.
+  public override pageDueForDigest(
+    after: OrganizationId | null,
+    limit: number,
+  ): Promise<readonly OrganizationId[]> {
+    return this.page(after, limit);
+  }
+
   public override page(
     after: OrganizationId | null,
     limit: number,

@@ -86,6 +86,7 @@ import {
   GetAssistantUsageReportUseCase,
   GetAssistantUsageUseCase,
   GetConversationUseCase,
+  GetDigestHourUseCase,
   GetDocPageUseCase,
   GetDocRevisionUseCase,
   GetDocSpaceUseCase,
@@ -190,6 +191,7 @@ import {
   PgNotificationPreferenceRepository,
   PgNotificationRecipientReader,
   PgNotificationRepository,
+  PgNotificationSettingsRepository,
   PgOrganizationFounder,
   PgOrganizationReader,
   PgOutboxGateway,
@@ -309,6 +311,7 @@ import {
   UnifiedMarkdownRenderer,
   type UnitOfWork,
   UpdateDefaultPlanUseCase,
+  UpdateDigestHourUseCase,
   UpdateDocSpaceUseCase,
   UpdateFlagTargetUseCase,
   UpdateFlagUseCase,
@@ -586,6 +589,8 @@ export class Container {
     readonly updatePreference: UpdateNotificationPreferenceUseCase;
     readonly deliver: DeliverNotificationUseCase;
     readonly sendDigest: SendNotificationDigestUseCase;
+    readonly digestHour: GetDigestHourUseCase;
+    readonly updateDigestHour: UpdateDigestHourUseCase;
   };
   // `generate` is null without a model: the worker registers no `assistant` lane then, and
   // `send` answers NOT_FOUND. The rest read what an earlier deploy with a model wrote.
@@ -1075,6 +1080,11 @@ export class Container {
       conversations,
     );
 
+    const notificationSettings = new PgNotificationSettingsRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
     this.notification = {
       list: new ListNotificationsUseCase(this.authorizer, notifications),
       archived: new ListArchivedNotificationsUseCase(
@@ -1118,6 +1128,14 @@ export class Container {
         notificationRecipients,
         this.mailPublisher,
         this.organizations,
+      ),
+      digestHour: new GetDigestHourUseCase(this.authorizer, notificationSettings),
+      updateDigestHour: new UpdateDigestHourUseCase(
+        this.authorizer,
+        notificationSettings,
+        this.activity,
+        this.catalogUnitOfWork,
+        this.clock,
       ),
     };
 
