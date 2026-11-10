@@ -16,10 +16,10 @@ const channel = z.enum(["in_app", "email"]);
 const mode = z.enum(["immediate", "digest", "off"]);
 
 export class NotificationContract {
+  private constructor() {}
+
   // The UTC hour this tenant's daily digest goes out at (`26.7`). 7 until someone changes it.
   public static readonly digestHour = z.object({ hour: z.number().int().min(0).max(23) });
-
-  private constructor() {}
 
   public static readonly kind = kind;
   public static readonly category = category;
@@ -36,6 +36,8 @@ export class NotificationContract {
     // Where clicking it goes, as a declared route. Nullable because not every
     // notification has somewhere to be.
     link: z.string().nullable(),
+    // The events this item stands for: "3 new" on a conversation still unread (`26.7`).
+    count: z.number().int().positive(),
     readAt: z.date().nullable(),
     createdAt: z.date(),
   });
