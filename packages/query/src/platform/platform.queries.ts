@@ -146,6 +146,15 @@ export class PlatformQueries {
     });
   }
 
+  // Five minutes, the projection's own cadence: a fresher read shows the same rows.
+  public static assistantUsage(client: ApiClient, days: 7 | 30 | 90) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.assistantUsage(days),
+      queryFn: () => client.platform.assistantUsage({ days }),
+      staleTime: 5 * 60_000,
+    });
+  }
+
   // A minute, like the retention read beside it: the rows change when somebody saves,
   // and the mutation invalidates this key. The backstop is for a second tab.
   public static projection(client: ApiClient) {

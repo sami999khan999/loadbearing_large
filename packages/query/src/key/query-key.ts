@@ -51,6 +51,7 @@ export class QueryKeys {
     lists: () => ["assistant", "list"] as const,
     list: (params: unknown) => ["assistant", "list", params] as const,
     get: (threadId: string) => ["assistant", "get", threadId] as const,
+    usage: () => ["assistant", "usage"] as const,
   };
 
   public static readonly widget = {
@@ -102,6 +103,7 @@ export class QueryKeys {
       ["platform", "retention", "preview", table, months, organizationId ?? null] as const,
     storage: (params: unknown) => ["platform", "storage", params] as const,
     projection: () => ["platform", "projection"] as const,
+    assistantUsage: (days: number) => ["platform", "assistant-usage", days] as const,
     policy: () => ["platform", "policy"] as const,
     gaps: () => ["platform", "projection", "gap"] as const,
     exports: (organizationId: string) => ["platform", "export", organizationId] as const,
