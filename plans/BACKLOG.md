@@ -32,7 +32,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 1 | 48 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
-| 14 | Code review of 2026-09-28, and the plan's review before it starts | 1 | 15 |
+| 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 1 | 8 |
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
@@ -180,15 +180,6 @@ here rather than in an archived file, because there is no archived file for it y
 are as of `2ee420a`. Each was checked against the code, and the scenario says what triggers it.
 
 ### Code
-
-- [ ] `RV.3` **Every fanned-out frame writes a replay log per member.** `MessagingRealtimeSubscriber`
-  publishes one `conversation.changed` per member to each user channel, and
-  `RedisRealtimePublisher.publish` turns each one into `XADD` + `EXPIRE` on
-  `realtime:log:<user channel>`. A message to a 25 000-member channel creates or extends 25 000
-  streams, each kept an hour, on the cache instance. `RealtimeLog.since` then reads and zod-parses
-  the whole stream (`XRANGE - +`) on every resume. After a drain that is every stream at once.
-  **Fix:** skip the log for user-channel fan-out frames, which are only list invalidations, or
-  measure the cost first at `26.8`'s scale.
 
 ### The access and visibility plan — improvements before Phase 1
 

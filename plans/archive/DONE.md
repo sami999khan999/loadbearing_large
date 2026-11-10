@@ -1975,10 +1975,19 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   thread. **Proof:** `apps/web/tests/route/loader-error.spec.ts`, and against a restarted
   `pnpm dev` `/messages/<unknown id>` answered 404 where it answered 500.
 
+- [x] `RV.3` **Every fanned-out frame writes a replay log per member** `done: 2026-11-11` — the
+  owner chose to skip the log. An event frame may carry `replay: false`; `RedisRealtimePublisher`
+  publishes it without `XADD` or `EXPIRE`, `MessagingRealtimeSubscriber` marks each member's
+  `conversation.changed` with it, and the client never resumes from one. On each reopen of the
+  user stream it refetches the conversation lists (`RealtimeRoutes.reopened`). **Proof:** specs
+  in the subscriber (member frames unlogged, the room's logged), the publisher (no log commands)
+  and `RealtimeStream` (no resume from it, `onReopened` once per reopen).
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-11 | @sami | **`RV.3` closed:** per-member fan-out frames skip the replay log; a reopen refetches the lists |
 | 2026-11-10 | @sami | **`AI.4` closed:** a loader's `FORBIDDEN` renders the not-found page |
 | 2026-11-10 | @sami | **`RW.3` closed:** the image orphan sweep reads archived revisions too |
 | 2026-11-10 | @sami | **`AI.1` closed: the AI Assistant**, usage reporting and the load test last |

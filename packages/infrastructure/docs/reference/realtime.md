@@ -79,6 +79,13 @@ resyncs: two logs share no order that one `lastEventId` could name.
 about two hundred frames of memory per active channel on the realtime Redis. A log is rebuildable
 state in the sense `data.md` means: losing it costs a refetch and nothing else.
 
+**A frame marked `replay: false` is published and never logged** (`RV.3`). That is messaging's
+per-member `conversation.changed`: a message to a 25 000-member channel would otherwise create or
+extend 25 000 streams, for frames that only say "refetch your list". The client never resumes from
+such a frame's id, and on every reopen of the user stream it refetches the conversation lists
+(`RealtimeRoutes.reopened`), which is what a missed one would have asked for. The room's own frame
+on the conversation channel stays logged.
+
 ## The cap counts user channels only
 
 `maxStreamsPerUser` counts concurrent streams per **user** channel, which `RealtimeChannels.isUser`
