@@ -144,9 +144,13 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 
 - [ ] `26.3` **Web push** — whole or not at all, a third channel in the preference grid.
   — `archive/COMMUNICATION.md:45`
-- [ ] `26.7` **Per-tenant digest hour, channel mentions, grouping**, plus the recipient list, count
-  and opt-out `23.4` called product work. The digest fan-out is per tenant now (`CP4.5`), which is
-  the shape a per-tenant hour needs. — `archive/COMMUNICATION.md:46`
+- [ ] `26.7` **Channel mentions** — what is left of it. Built 2026-11-11: the per-tenant digest
+  hour (`notification_settings`, an hourly run, 07:00 UTC by default, set by
+  `notification.digest.manage` on notification settings); the digest's lines by kind and its
+  opt-out link to preferences; and grouping, a `count` on the one unread item per conversation
+  ("3 new"), counted once per event. **Left:** a mention syntax the composer inserts and the
+  server resolves to members, then a `message.sent` policy row for mentioned channel members.
+  — `archive/COMMUNICATION.md:46`
 
 ---
 
