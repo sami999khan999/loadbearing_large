@@ -381,4 +381,17 @@ export const platform = {
   "platform.workers.queues.dialogDescription":
     "Replaces this process's WORKER_QUEUES until it restarts or is reset. A removed queue finishes its running jobs first.",
   "platform.workers.unserved": "No process serves {queues} now. Those jobs wait until one does.",
+
+  "platform.assistantUsage.title": "AI usage",
+  "platform.assistantUsage.window": "{days} days",
+  "platform.assistantUsage.column.day": "Day",
+  "platform.assistantUsage.column.organization": "Organization",
+  "platform.assistantUsage.column.model": "Model",
+  "platform.assistantUsage.column.input": "Input tokens",
+  "platform.assistantUsage.column.output": "Output tokens",
+  "platform.assistantUsage.column.answers": "Answers",
+  "platform.assistantUsage.empty": "No assistant answers in this window.",
+  "platform.assistantUsage.notConfigured":
+    "AI usage is read from the analytics store, which this deployment does not run.",
+  "platform.assistantUsage.truncated": "Showing the 500 largest rows.",
 } as const;

@@ -328,4 +328,17 @@ export const platform = {
     "প্রসেসটি রিস্টার্ট বা রিসেট না হওয়া পর্যন্ত এটি WORKER_QUEUES-এর জায়গা নেয়। সরানো কিউ আগে তার চলমান কাজ শেষ করে।",
   "platform.workers.unserved":
     "এখন কোনো প্রসেস {queues} সামলায় না। কেউ না সামলানো পর্যন্ত সেই কাজগুলো অপেক্ষা করবে।",
+
+  "platform.assistantUsage.title": "এআই ব্যবহার",
+  "platform.assistantUsage.window": "{days} দিন",
+  "platform.assistantUsage.column.day": "দিন",
+  "platform.assistantUsage.column.organization": "প্রতিষ্ঠান",
+  "platform.assistantUsage.column.model": "মডেল",
+  "platform.assistantUsage.column.input": "ইনপুট টোকেন",
+  "platform.assistantUsage.column.output": "আউটপুট টোকেন",
+  "platform.assistantUsage.column.answers": "উত্তর",
+  "platform.assistantUsage.empty": "এই সময়ে সহকারীর কোনো উত্তর নেই।",
+  "platform.assistantUsage.notConfigured":
+    "এআই ব্যবহার অ্যানালিটিক্স স্টোর থেকে পড়া হয়, যা এই ডিপ্লয়মেন্টে চলে না।",
+  "platform.assistantUsage.truncated": "সবচেয়ে বড় ৫০০টি সারি দেখানো হচ্ছে।",
 } as const;
