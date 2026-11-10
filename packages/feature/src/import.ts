@@ -60,6 +60,7 @@ export {
   type MailSettingsDto,
   type MemberDto,
   type MessageDto,
+  type MessageEmoji,
   type NotificationDto,
   type NotificationPreferenceDto,
   type OrganizationId,

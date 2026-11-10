@@ -13,6 +13,7 @@ import {
   useMemo,
 } from "../import.js";
 import { MentionText } from "./mention-text.js";
+import { ReactionBar } from "./reaction.bar.js";
 
 export interface MessageListProps {
   readonly conversationId: string;
@@ -80,6 +81,11 @@ export function MessageList({ conversationId, nameFor }: MessageListProps) {
               {DateFormat.day(row.createdAt)}
               {row.editedAt ? ` · ${t("messaging.conversation.edited")}` : ""}
             </small>
+            {
+              // Not on a row the server has not confirmed: its id is the client's, and a
+              // reaction to it would name a message that does not exist.
+              row.deleted || row.id === row.clientId ? null : <ReactionBar message={row} />
+            }
           </li>
         ))}
       </ol>
