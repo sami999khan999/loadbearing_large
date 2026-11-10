@@ -36,6 +36,7 @@ const unread = (kind: NotificationRecord["kind"], category: NotificationRecord["
     category,
     params: {},
     link: null,
+    count: 1,
     readAt: null,
     createdAt: new Date("2026-09-20T09:00:00.000Z"),
   }) satisfies NotificationRecord;
@@ -53,6 +54,20 @@ class Notifications implements NotificationRepository {
 
   public saveMany(): Promise<readonly (typeof USER)[]> {
     return Promise.resolve([]);
+  }
+
+  public readonly counted: { userIds: readonly string[]; subjectId: string; eventId: string }[] =
+    [];
+
+  public countIntoUnread(
+    _organizationId: unknown,
+    userIds: readonly string[],
+    _kind: unknown,
+    subjectId: string,
+    eventId: string,
+  ): Promise<void> {
+    if (userIds.length > 0) this.counted.push({ userIds, subjectId, eventId });
+    return Promise.resolve();
   }
 
   public unreadSubjectHolders(): Promise<ReadonlySet<never>> {

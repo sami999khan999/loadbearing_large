@@ -125,6 +125,14 @@ export class DeliverNotificationUseCase {
       event.id,
     );
 
+    // Grouped rather than dropped (`26.7`): the bell keeps one item, and it counts.
+    await this.notifications.countIntoUnread(
+      event.organizationId,
+      [...holding],
+      row.kind,
+      subjectId,
+      event.id,
+    );
     return audience.filter((recipient) => !holding.has(recipient.userId));
   }
 
