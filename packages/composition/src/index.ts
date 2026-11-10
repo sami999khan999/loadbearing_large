@@ -57,9 +57,11 @@ export {
   RecordingRelayedActivityStore,
   RecordingSessionGateway,
   ScriptedAssistantModel,
+  StubEmailSenderResolver,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubMarkdownRenderer,
+  StubSecretCipher,
   StubSessionResolver,
   type TenantMoveStep,
 } from "./fake/index.js";

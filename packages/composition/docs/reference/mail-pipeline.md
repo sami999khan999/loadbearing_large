@@ -118,6 +118,30 @@ correlate against. It is the whole reason `EmailSender.send` returns a receipt r
 and the reason `SendMailUseCase` returns it rather than swallowing it: `application` never logs, so
 the use-case hands the receipt up and the worker writes the line.
 
+## Which mail server a message goes out through (`26.11`)
+
+`SendMailUseCase` asks `EmailSenderResolver`, in this order:
+
+| Message | Tried first | Then | Then |
+|---|---|---|---|
+| `auth.*` | the platform default | `SMTP_URL` | — |
+| any other, with a tenant | that tenant's server | the platform default | `SMTP_URL` |
+
+**Sign-in mail never uses a tenant's server.** A tenant who misconfigures their mail host must not
+be able to lock anyone out of signing in. The platform default is the platform organization's own
+row, set on the platform **Mail** page like any tenant's.
+
+- **Passwords are encrypted** with AES-256-GCM under `MAIL_SECRET_KEY` (`AesGcmSecretCipher` behind
+  the `SecretCipher` port). The key is never derived from `AUTH_SECRET`, so rotating the cookie
+  secret breaks no tenant's mail. Without the key, no password can be saved.
+- **Passwords are write-only.** A read returns `hasPassword` and nothing else, and the audit row
+  holds the host and sender only.
+- **One pool per server.** `SmtpEmailSenderResolver` keeps a pooled sender per configured row,
+  rebuilt only when the row's `updated_at` changes and re-read at most once a minute. A save
+  reaches every worker within that minute.
+- **A password that will not decrypt** (a rotated key) is logged as `mail.settings.unusable`, and
+  that tenant's mail falls back to the next sender rather than failing.
+
 ## Why the invitation send still sits after the commit
 
 `InviteMemberUseCase` publishes its mail after `unitOfWork.run` and still wraps it in a

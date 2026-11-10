@@ -4,6 +4,7 @@ import {
   type ActivityReplayReader,
   AddConversationMemberUseCase,
   AdjustEntitlementUseCase,
+  AesGcmSecretCipher,
   type AnalyticsProjector,
   ApiKeyResolver,
   AssignPlanUseCase,
@@ -50,6 +51,7 @@ import {
   DeleteAssistantThreadUseCase,
   DeleteDocPageUseCase,
   DeleteDocSpaceUseCase,
+  DeleteMailSettingsUseCase,
   DeleteMessageUseCase,
   DeleteOrganizationUseCase,
   DeletePlanUseCase,
@@ -88,6 +90,7 @@ import {
   GetDocRevisionUseCase,
   GetDocSpaceUseCase,
   GetEntitlementUseCase,
+  GetMailSettingsUseCase,
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
@@ -179,6 +182,7 @@ import {
   PgInvitationClaimer,
   PgInvitationRepository,
   PgMailDeliveryRepository,
+  PgMailSettingsRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
@@ -265,6 +269,7 @@ import {
   S3StoragePolicyGateway,
   SaveDocGrantUseCase,
   SaveDocPageUseCase,
+  SaveMailSettingsUseCase,
   SavePlanUseCase,
   SaveQueueAutoscaleUseCase,
   SERVER_CATALOG,
@@ -286,6 +291,7 @@ import {
   ShardScope,
   SignalTypingUseCase,
   SmtpEmailSender,
+  SmtpEmailSenderResolver,
   StaticContentSource,
   type StorageGateway,
   type StoragePolicyGateway,
@@ -508,6 +514,9 @@ export class Container {
   // behind it, and a reconciliation against nothing is simply a count.
   public readonly activityReplay: ActivityReplayReader;
 
+  // Each configured mail server's pooled sender, closed with the deployment's.
+  private readonly emailSenders: SmtpEmailSenderResolver;
+
   // ── the derived stores, absent unless configured ─────────
   // Optional fields rather than no-op implementations: a null projector is
   // indistinguishable from a working pipeline until a quarterly report comes out wrong.
@@ -552,6 +561,12 @@ export class Container {
   // has no auth config — which is exactly what building the old mailer in there got wrong.
   public readonly mail: {
     readonly send: SendMailUseCase;
+    // A platform default and per-tenant mail servers (`26.11`), on the platform Mail page.
+    readonly settings: {
+      readonly get: GetMailSettingsUseCase;
+      readonly save: SaveMailSettingsUseCase;
+      readonly remove: DeleteMailSettingsUseCase;
+    };
     // The delivery log (`26.10`): written by the consumer, read on the platform Mail page.
     readonly record: RecordMailDeliveryUseCase;
     readonly deliveries: ListMailDeliveriesUseCase;
@@ -965,16 +980,6 @@ export class Container {
       this.shards,
     );
     this.platform = new PgPlatformReader(this.cluster, this.transactions, this.shards);
-    const mailDeliveries = new PgMailDeliveryRepository(
-      this.cluster,
-      this.transactions,
-      this.shards,
-    );
-    this.mail = {
-      send: new SendMailUseCase(this.mailRenderer, this.email),
-      record: new RecordMailDeliveryUseCase(mailDeliveries, this.platform, this.clock),
-      deliveries: new ListMailDeliveriesUseCase(this.authorizer, mailDeliveries),
-    };
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache, this.platform);
 
     // Shares the transaction scope, which is what makes the audit row commit with the
@@ -982,6 +987,43 @@ export class Container {
     const activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
     this.activity = activity;
     this.relayedActivity = activity;
+    const mailDeliveries = new PgMailDeliveryRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const mailSettings = new PgMailSettingsRepository(this.cluster, this.transactions, this.shards);
+    const cipher = config.email.secretKey ? new AesGcmSecretCipher(config.email.secretKey) : null;
+    this.emailSenders = new SmtpEmailSenderResolver(
+      mailSettings,
+      cipher,
+      this.platform,
+      this.logger,
+    );
+    this.mail = {
+      send: new SendMailUseCase(this.mailRenderer, this.email, this.emailSenders),
+      settings: {
+        get: new GetMailSettingsUseCase(this.authorizer, mailSettings, cipher),
+        save: new SaveMailSettingsUseCase(
+          this.authorizer,
+          mailSettings,
+          cipher,
+          this.platform,
+          this.activity,
+          this.catalogUnitOfWork,
+          this.clock,
+        ),
+        remove: new DeleteMailSettingsUseCase(
+          this.authorizer,
+          mailSettings,
+          this.platform,
+          this.activity,
+          this.catalogUnitOfWork,
+        ),
+      },
+      record: new RecordMailDeliveryUseCase(mailDeliveries, this.platform, this.clock),
+      deliveries: new ListMailDeliveriesUseCase(this.authorizer, mailDeliveries),
+    };
     this.eventPublisher = new PgOutboxPublisher(
       this.cluster,
       this.transactions,
@@ -2176,6 +2218,7 @@ export class Container {
     // Before Postgres only because nothing else depends on it: an unclosed transport is
     // its own reason to be here, not a step in the ordering above.
     await this.closing("smtp", () => this.emailSender.close());
+    await this.closing("smtp", () => this.emailSenders.close());
     // The cluster owns every pool including node 0's, so this is the one close and it
     // is last: a repository on any node may still be finishing the lines above.
     await this.closing("postgres", () => this.cluster.close());

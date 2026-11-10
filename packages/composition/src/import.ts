@@ -48,6 +48,7 @@ export {
   DeleteDocPageUseCase,
   DeleteDocSpaceUseCase,
   type DeletedTenantSweep,
+  DeleteMailSettingsUseCase,
   DeleteMessageUseCase,
   DeleteOrganizationUseCase,
   DeletePlanUseCase,
@@ -71,6 +72,7 @@ export {
   type EmailMessage,
   type EmailReceipt,
   EmailSender,
+  EmailSenderResolver,
   EmbeddingProvider,
   EventSubscriber,
   ExpireEntitlementAdjustmentsUseCase,
@@ -92,6 +94,7 @@ export {
   GetDocRevisionUseCase,
   GetDocSpaceUseCase,
   GetEntitlementUseCase,
+  GetMailSettingsUseCase,
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
@@ -229,6 +232,7 @@ export {
   RoleRepository,
   SaveDocGrantUseCase,
   SaveDocPageUseCase,
+  SaveMailSettingsUseCase,
   SavePlanUseCase,
   SaveQueueAutoscaleUseCase,
   SearchDocsUseCase,
@@ -236,6 +240,7 @@ export {
   type SearchHit,
   type SearchMode,
   SearchPlatformDocsUseCase,
+  SecretCipher,
   SendAssistantQuestionUseCase,
   SendMailUseCase,
   SendMessageUseCase,
@@ -352,6 +357,7 @@ export { ConflictError, NotFoundError } from "@loadbearing/errors";
 // Every concrete adapter, Postgres included — one block, because one package holds the
 // whole outside-world side of the ports below.
 export {
+  AesGcmSecretCipher,
   BullMqQueueControlGateway,
   BullMqQueuePublisher,
   CannedAssistantModel,
@@ -387,6 +393,7 @@ export {
   PgInvitationClaimer,
   PgInvitationRepository,
   PgMailDeliveryRepository,
+  PgMailSettingsRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
@@ -434,6 +441,7 @@ export {
   type ShardConfig,
   ShardScope,
   SmtpEmailSender,
+  SmtpEmailSenderResolver,
   TransactionScope,
   UnifiedMarkdownRenderer,
 } from "@loadbearing/infrastructure";

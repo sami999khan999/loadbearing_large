@@ -84,6 +84,9 @@ export interface ContainerConfig {
     // The origin a link in a message points at. Separate from `auth.baseUrl`, which is
     // Better Auth's own: the worker sends invitation mail and has no auth config at all.
     readonly baseUrl: string;
+    // `MAIL_SECRET_KEY`, 32 bytes base64. Absent, no SMTP password can be saved from the
+    // dashboard, and a saved one is not used (`26.11`).
+    readonly secretKey?: string;
   };
   // `none` is lexical search over the chunk text and no outbound call. The other two need
   // a key, and a model defaults per provider when unset. See docs/reference/container.md.
