@@ -37,7 +37,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 1 | 22 |
-| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 3 | 1 |
+| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 3 | 2 |
 
 Sections 2, 4, 5, 7, 8, 9, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
@@ -290,11 +290,11 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
 - [ ] `AI.2` **Walk the Assistant in a browser.** Send, stream, Stop, reload mid-answer, two tabs
   (the second refreshes on `assistant.changed`), rename, delete, a source lost since the answer,
   both locales, keyboard only. Needs a slow fake answer or a real key to see the stream move.
-- [ ] `AI.3` **A loader's `NOT_FOUND` renders a 500.** `/assistant/<unknown id>`,
-  `/messages/<unknown id>` and `/doc/<space>/<missing page>` all answer 500 server-side, because
-  `ensureQueryData` rethrows the oRPC error and nothing maps `NOT_FOUND` to `notFound()`. Nothing
-  leaks; the status is wrong. **Fix** once, where loaders run, not per route. Lite ports a
-  simpler version once it closes.
+- [ ] `AI.4` **A loader's `FORBIDDEN` renders a 500.** Found closing `AI.3`: carol opens
+  `/messages/<id>`, `RouteGuard` lets her through, then `conversation.get` answers `FORBIDDEN`
+  for `messaging.conversation.read`. Two faults: the client gate and the procedure disagree,
+  and a loader's `FORBIDDEN` reaches the error boundary as a 500. **Fix** the disagreement first,
+  then decide whether a loader's `FORBIDDEN` maps to a 403 the way `NOT_FOUND` maps to a 404.
 
 ---
 

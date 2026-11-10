@@ -1945,10 +1945,19 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   `reembed` route, the full suite, boot smokes for all three apps, and on the local database an
   inserted pre-`0055` chunk adopted once and not again.
 
+- [x] `AI.3` **A loader's `NOT_FOUND` renders a 500** `done: 2026-11-10` — fixed once, where
+  loaders run: `apps/web/src/route/-loader-error.ts` gives every route in the tree an
+  `onError` that turns a normalized `NOT_FOUND` into the router's `notFound()`, so the root's
+  `NotFound` renders with a 404. A route's own `onError` wins. **Proof:** against `pnpm dev`,
+  signed in as carol, `/assistant/<unknown id>` and `/doc/nope/missing` answered 500 before and
+  404 after; `/assistant` and `/dashboard` stay 200. `/messages/<unknown id>` still answers 500,
+  because its procedure says `FORBIDDEN` rather than `NOT_FOUND`: that is `AI.4`.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-10 | @sami | **`AI.3` closed:** a loader's `NOT_FOUND` renders the not-found page with a 404, for every route at once |
 | 2026-10-10 | @sami | **`FC.16`–`FC.19`, from walking lite in a browser:** field errors for bad input, CSRF on server functions, and dev hydration after `start.ts` |
 | 2026-10-10 | @sami | **§20 closed in full: `FC.13`–`FC.15`, the security headers, the web connection budget and the https `AUTH_URL` rule, in both kits** |
 | 2026-10-10 | @sami | **§20, the final check: `FC.1`–`FC.6` and `FC.8`–`FC.10` fixed in both kits, `FC.7` checked and not a defect.** Lite also fixes its own `FC.11` and `FC.12`. `BACKLOG.md` §20 keeps three design items, `FC.13`–`FC.15` |
