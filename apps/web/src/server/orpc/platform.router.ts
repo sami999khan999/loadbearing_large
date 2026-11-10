@@ -193,6 +193,21 @@ export class PlatformRouter {
     },
   );
 
+  public static readonly mailSettings = authed.platform.mailSettings.handler(({ input, context }) =>
+    context.container.mail.settings.get.execute(context.principal, input),
+  );
+
+  public static readonly saveMailSettings = authed.platform.saveMailSettings.handler(
+    ({ input, context }) => context.container.mail.settings.save.execute(context.principal, input),
+  );
+
+  public static readonly removeMailSettings = authed.platform.removeMailSettings.handler(
+    async ({ input, context }) => {
+      await context.container.mail.settings.remove.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
   public static readonly mailDeliveries = authed.platform.mailDeliveries.handler(
     ({ input, context }) => context.container.mail.deliveries.execute(context.principal, input),
   );
@@ -294,6 +309,9 @@ export class PlatformRouter {
     listProjection: PlatformRouter.listProjection,
     assistantUsage: PlatformRouter.assistantUsage,
     mailDeliveries: PlatformRouter.mailDeliveries,
+    mailSettings: PlatformRouter.mailSettings,
+    saveMailSettings: PlatformRouter.saveMailSettings,
+    removeMailSettings: PlatformRouter.removeMailSettings,
     updateProjection: PlatformRouter.updateProjection,
     deleteTenant: PlatformRouter.deleteTenant,
     exportTenant: PlatformRouter.exportTenant,

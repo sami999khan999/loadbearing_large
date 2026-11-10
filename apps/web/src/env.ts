@@ -84,6 +84,9 @@ const Schema = z
     // Never defaulted: an address the sending domain does not authorise bounces or lands
     // in spam, silently.
     EMAIL_FROM: z.string().min(1),
+    // 32 bytes, base64, for SMTP passwords saved from the platform Mail page (`26.11`).
+    // Never derived from AUTH_SECRET: rotating that must not break every tenant's mail.
+    MAIL_SECRET_KEY: z.string().min(1).optional(),
     // The origin a link in a message points at. Separate from `AUTH_URL`, which is Better
     // Auth's own: the worker sends invitation mail and parses no auth configuration.
     APP_BASE_URL: z.url(),
@@ -357,7 +360,12 @@ export class Env {
             ? { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET }
             : undefined,
       },
-      email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
+      email: {
+        url: e.SMTP_URL,
+        from: e.EMAIL_FROM,
+        baseUrl: e.APP_BASE_URL,
+        ...(e.MAIL_SECRET_KEY ? { secretKey: e.MAIL_SECRET_KEY } : {}),
+      },
       embedding: {
         provider: e.EMBEDDING_PROVIDER,
         dimensions: e.EMBEDDING_DIMENSIONS,

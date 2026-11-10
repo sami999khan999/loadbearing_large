@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  Can,
   type ClientNamespace,
   MailDeliveryList,
+  MailSettingsForm,
   PLATFORM_ROUTE_PERMISSION,
+  useCapabilities,
   useMessages,
   useSession,
 } from "~/import.js";
@@ -21,11 +24,15 @@ export const Route = createFileRoute("/(app)/_authenticated/platform/mail")({
 function PlatformMail() {
   const { t } = useMessages("platform");
   const { user } = useSession();
+  const capabilities = useCapabilities();
 
   return (
     <main>
       <h1>{t("platform.mail.title")}</h1>
       <p>{t("platform.mail.description")}</p>
+      <Can permission="platform.mail.manage" capabilities={capabilities}>
+        <MailSettingsForm defaultOrganizationId={user?.activeOrganizationId ?? ""} />
+      </Can>
       <MailDeliveryList defaultOrganizationId={user?.activeOrganizationId ?? ""} />
     </main>
   );
