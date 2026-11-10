@@ -6,6 +6,7 @@ import type {
   EditMessageInput,
   LeaveConversationInput,
   MarkConversationReadInput,
+  ReactToMessageInput,
   SendMessageInput,
   TypingInput,
 } from "../import.js";
@@ -43,6 +44,15 @@ export class MessagingMutations {
   public static useEdit(client: ApiClient) {
     return useAppMutation<Message, EditMessageInput>({
       mutationFn: (input) => client.message.edit(input),
+      invalidates: [QueryKeys.message.all()],
+    });
+  }
+
+  // A refetch of the page rather than an optimistic count: the counts are everyone's, and
+  // the room's other tabs refetch from the same frame anyway (`26.1`).
+  public static useReact(client: ApiClient) {
+    return useAppMutation<{ ok: true }, ReactToMessageInput>({
+      mutationFn: (input) => client.message.react(input),
       invalidates: [QueryKeys.message.all()],
     });
   }
@@ -107,6 +117,7 @@ export class MessagingMutations {
       deleted: false,
       editedAt: null,
       createdAt: new Date(),
+      reactions: [] as Message["reactions"],
     } as Message;
   }
 }

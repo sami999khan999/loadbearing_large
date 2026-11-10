@@ -96,6 +96,7 @@ export type {
   QueueAutoscaleInput,
   QueuedDocumentDto,
   QueuePauseInput,
+  ReactToMessageInput,
   RealtimeEventName,
   RealtimeMessage,
   RenameAssistantThreadInput,
