@@ -1983,10 +1983,19 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   in the subscriber (member frames unlogged, the room's logged), the publisher (no log commands)
   and `RealtimeStream` (no resume from it, `onReopened` once per reopen).
 
+- [x] `26.10` **A delivery log** `done: 2026-11-11` — `mail_delivery`, partitioned and kept
+  thirteen months, written by `MailConsumer` after a send succeeds or its last attempt fails,
+  through `RecordMailDeliveryUseCase`; never read by the send path, and holding no params, so no
+  link or token. Tenantless mail is the platform organization's. Read on the platform **Mail**
+  page (`platform.mail.read`, `platform.mailDeliveries`), one tenant at a time and narrowed by
+  address. **Proof:** use-case, consumer and repository specs; against `pnpm dev` a sign-up's
+  verification mail appeared as `sent` with its server message id for alice.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-11 | @sami | **`26.10` closed:** the mail delivery log and the platform Mail page |
 | 2026-11-11 | @sami | **`RV.3` closed:** per-member fan-out frames skip the replay log; a reopen refetches the lists |
 | 2026-11-10 | @sami | **`AI.4` closed:** a loader's `FORBIDDEN` renders the not-found page |
 | 2026-11-10 | @sami | **`RW.3` closed:** the image orphan sweep reads archived revisions too |
