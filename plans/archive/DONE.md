@@ -1553,6 +1553,12 @@ in this file's history of `BACKLOG.md` §15.
 
 ## 19. Review of 2026-10-10 — closed so far
 
+- [x] `RW.3` **An archived `doc_revision` month makes its images look unlinked** `done: 2026-11-10`
+  — `DocImageOrphans` now streams the tenant's archived `doc_revision` months out of cold
+  storage and keeps every image they link. A month the index has forgotten has expired, so its
+  images may go with it. **Proof:** `doc-image-orphans.spec.ts` keeps an image only an archived
+  revision links and deletes one no month links; it fails on the old sweep.
+
 Eighteen findings from two reviews of the code both kits share, each checked against the code
 before it was fixed, and ported to lite. One more, a cross-site GET reaching an RPC mutation, was
 false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless told not to.
@@ -1966,6 +1972,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-10 | @sami | **`RW.3` closed:** the image orphan sweep reads archived revisions too |
 | 2026-11-10 | @sami | **`AI.1` closed: the AI Assistant**, usage reporting and the load test last |
 | 2026-11-10 | @sami | **`AI.3` closed:** a loader's `NOT_FOUND` renders the not-found page with a 404, for every route at once |
 | 2026-10-10 | @sami | **`FC.16`–`FC.19`, from walking lite in a browser:** field errors for bad input, CSRF on server functions, and dev hydration after `start.ts` |

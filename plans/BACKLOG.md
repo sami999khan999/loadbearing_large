@@ -36,7 +36,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 1 | 8 |
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
-| 19 | Review of 2026-10-10 | 1 | 22 |
+| 19 | Review of 2026-10-10 | 0 | 23 |
 | 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 2 | 3 |
 
 Sections 2, 4, 5, 7, 8, 9, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
@@ -266,14 +266,6 @@ Two reviewers read the code both kits share after the 2026-10-10 fixes. One find
 (oRPC's fetch `RPCHandler` already adds `StrictGetMethodPlugin`, so no cross-site GET reaches a
 mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
 [`archive/DONE.md`](archive/DONE.md) §19, and lite has each shared one too. One is left.
-
-- [ ] `RW.3` **An archived `doc_revision` month makes its images look unlinked.** `DocImageOrphans`
-  reads only revisions still in Postgres, and `doc_revision` is a partitioned table the retention
-  pass can archive. Once a month is in cold storage, the next orphan sweep in that space deletes
-  the images only those revisions named, and restoring the month brings back broken links. Big
-  kit only: lite archives nothing. **Fix:** read `partition_archive` for the space's archived
-  months and keep every image key under them, or keep a space's images until its revisions'
-  retention expires.
 
 ## 22. AI assistant — `AI.0`, `AI.1` and `AI.3` closed
 
