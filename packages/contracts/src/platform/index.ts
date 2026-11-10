@@ -10,6 +10,7 @@ export {
   type AdjustmentClearInput,
   type AdjustmentDto,
   type AdjustmentSaveInput,
+  type AssistantUsageReportDto,
   type ColdModeDto,
   type DeleteRequestedDto,
   type ExportRequestedDto,

@@ -433,6 +433,31 @@ export class PlatformContract {
     isDefault: z.boolean(),
   });
 
+  public static readonly assistantUsageQuery = z.object({
+    days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30),
+  });
+
+  // `configured` false without the analytics store, so the panel never reads as zero use.
+  public static readonly assistantUsage = z.object({
+    configured: z.boolean(),
+    from: z.string(),
+    to: z.string(),
+    truncated: z.boolean(),
+    rows: z
+      .array(
+        z.object({
+          organizationId: z.uuid(),
+          organizationName: z.string().nullable(),
+          model: z.string(),
+          day: z.string(),
+          inputTokens: z.number().int().nonnegative(),
+          outputTokens: z.number().int().nonnegative(),
+          answers: z.number().int().nonnegative(),
+        }),
+      )
+      .readonly(),
+  });
+
   public static readonly projection = z.object({
     actions: z.array(PlatformContract.projectionEntry).readonly(),
     defaultMonths: z.number().int(),
@@ -642,6 +667,7 @@ export type FlagTargetDto = z.infer<typeof PlatformContract.flagTarget>;
 export type FlagToggleInput = z.infer<typeof PlatformContract.flagToggle>;
 export type FlagTargetToggleInput = z.infer<typeof PlatformContract.flagTargetToggle>;
 export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
+export type AssistantUsageReportDto = z.infer<typeof PlatformContract.assistantUsage>;
 export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;
 export type ProjectionUpdateInput = z.infer<typeof PlatformContract.projectionUpdate>;
 export type TenantExportInput = z.infer<typeof PlatformContract.tenantExport>;

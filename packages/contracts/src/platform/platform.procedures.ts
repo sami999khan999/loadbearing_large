@@ -177,6 +177,12 @@ export class PlatformProcedures {
     .input(PlatformContract.moduleSwitchUpdate)
     .output(Envelope.acknowledged);
 
+  // Tokens by tenant, model and UTC day, read from the analytics store.
+  public static readonly assistantUsage = oc
+    .route({ method: "GET", path: "/platform/assistant-usage" })
+    .input(PlatformContract.assistantUsageQuery)
+    .output(PlatformContract.assistantUsage);
+
   public static readonly listProjection = oc
     .route({ method: "GET", path: "/platform/projection" })
     .output(PlatformContract.projection);
@@ -269,6 +275,7 @@ export class PlatformProcedures {
     updateProjectionSwitch: PlatformProcedures.updateProjectionSwitch,
     updateReplicaSwitch: PlatformProcedures.updateReplicaSwitch,
     listProjection: PlatformProcedures.listProjection,
+    assistantUsage: PlatformProcedures.assistantUsage,
     updateProjection: PlatformProcedures.updateProjection,
     deleteTenant: PlatformProcedures.deleteTenant,
     exportTenant: PlatformProcedures.exportTenant,
