@@ -5,6 +5,7 @@ import type { PermissionKey } from "../import.js";
 export const messagingProcedurePermissions = {
   "conversation.list": "messaging.conversation.read",
   "conversation.get": "messaging.conversation.read",
+  "conversation.presence": "messaging.conversation.read",
   "conversation.create": "messaging.conversation.create",
   // Adding, removing and renaming are administration. Leaving is not — it is something
   // anyone in a conversation may always do.
