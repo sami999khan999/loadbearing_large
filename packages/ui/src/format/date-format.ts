@@ -7,4 +7,9 @@ export class DateFormat {
   public static day(value: Date): string {
     return value.toISOString().slice(0, 10);
   }
+
+  // `YYYY-MM-DD HH:MM UTC`, for a log a person reads to the minute.
+  public static minute(value: Date): string {
+    return `${value.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  }
 }
