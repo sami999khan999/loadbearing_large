@@ -32,6 +32,9 @@ export const platformActions = {
   "platform.restore.requested": { label: "Restore requested" },
   "platform.reproject.requested": { label: "Re-projection requested" },
   "tenant.retention.changed": { label: "Tenant retention changed" },
+  // The server and sender in the payload, never the password (`26.11`).
+  "platform.mail.settings.saved": { label: "Mail server saved" },
+  "platform.mail.settings.removed": { label: "Mail server removed" },
   // Two, because the delete is a job now: one says who asked and when, the other says
   // what it cost. A failed job leaves the first without the second, which is the point.
   "tenant.delete_requested": { label: "Tenant delete requested" },

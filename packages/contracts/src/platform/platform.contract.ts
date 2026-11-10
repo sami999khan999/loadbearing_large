@@ -441,6 +441,36 @@ export class PlatformContract {
     cursor: z.string().max(256).optional(),
   });
 
+  public static readonly mailSettingsQuery = z.object({
+    organizationId: Identifiers.organizationId,
+  });
+
+  // The password is write-only: absent keeps the stored one, null clears it (`26.11`).
+  public static readonly saveMailSettings = z.object({
+    organizationId: Identifiers.organizationId,
+    host: z.string().trim().min(1).max(253),
+    port: z.number().int().min(1).max(65_535),
+    secure: z.boolean(),
+    username: z.string().trim().max(320).nullable(),
+    password: z.string().max(1_024).nullable().optional(),
+    fromAddress: z.string().trim().min(3).max(320),
+  });
+
+  public static readonly mailSettingsView = z.object({
+    host: z.string(),
+    port: z.number().int(),
+    secure: z.boolean(),
+    username: z.string().nullable(),
+    hasPassword: z.boolean(),
+    fromAddress: z.string(),
+    updatedAt: z.date(),
+  });
+
+  public static readonly mailSettings = z.object({
+    canStorePasswords: z.boolean(),
+    settings: PlatformContract.mailSettingsView.nullable(),
+  });
+
   public static readonly mailDeliveryPage = z.object({
     items: z
       .array(
@@ -694,6 +724,8 @@ export type FlagToggleInput = z.infer<typeof PlatformContract.flagToggle>;
 export type FlagTargetToggleInput = z.infer<typeof PlatformContract.flagTargetToggle>;
 export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
 export type AssistantUsageReportDto = z.infer<typeof PlatformContract.assistantUsage>;
+export type MailSettingsDto = z.infer<typeof PlatformContract.mailSettings>;
+export type SaveMailSettingsInput = z.infer<typeof PlatformContract.saveMailSettings>;
 export type MailDeliveryPageDto = z.infer<typeof PlatformContract.mailDeliveryPage>;
 export type MailDeliveryDto = MailDeliveryPageDto["items"][number];
 export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;

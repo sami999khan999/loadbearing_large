@@ -23,6 +23,9 @@ export const platformProcedurePermissions = {
   "platform.listProjection": "platform.analytics.read",
   "platform.assistantUsage": "platform.analytics.read",
   "platform.mailDeliveries": "platform.mail.read",
+  "platform.mailSettings": "platform.mail.read",
+  "platform.saveMailSettings": "platform.mail.manage",
+  "platform.removeMailSettings": "platform.mail.manage",
   "platform.updateProjection": "platform.analytics.manage",
   // Manage: routing a read off the primary is a change to what every batch job sees.
   "platform.updateReplicaSwitch": "platform.replica.manage",
