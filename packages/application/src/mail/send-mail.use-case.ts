@@ -19,8 +19,8 @@ export class SendMailUseCase {
     private readonly email: EmailSender,
   ) {}
 
-  // `actor` asserts nothing and the receipt is the delivery record, because there is no
-  // delivery table. Both are argued in docs/reference/ports.md.
+  // `actor` asserts nothing, and the receipt goes back to the consumer, which logs it and
+  // records the outcome. Both are argued in docs/reference/ports.md.
   public execute(actor: Principal, input: SendMailInput): Promise<EmailReceipt> {
     void actor;
     return this.send(input);

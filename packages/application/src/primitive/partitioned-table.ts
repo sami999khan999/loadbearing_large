@@ -14,6 +14,7 @@ const DOC_SECTIONS = "doc_sections";
 const ASSISTANT_THREADS = "assistant_threads";
 const ASSISTANT_MESSAGES = "assistant_messages";
 const AI_USAGE = "ai_usage";
+const MAIL_DELIVERY = "mail_delivery";
 
 // The column the table is ranged by. A closed union rather than `string`: it is inlined
 // into DDL and into every predicate that wants a partition pruned.
@@ -145,6 +146,14 @@ const ALL = Object.freeze([
     column: "created_at",
     retentionMonths: 12,
   }),
+  // Every send and every final failure (`26.10`). It grows with mail, and a year and a month
+  // answers "was this sent" for anything a person still remembers asking about.
+  Object.freeze({
+    name: MAIL_DELIVERY,
+    tenantKey: "organization_id",
+    column: "created_at",
+    retentionMonths: 13,
+  }),
   Object.freeze({
     name: AI_USAGE,
     tenantKey: "organization_id",
@@ -197,6 +206,7 @@ export class PartitionedTable {
   public static readonly ASSISTANT_THREADS = ASSISTANT_THREADS;
   public static readonly ASSISTANT_MESSAGES = ASSISTANT_MESSAGES;
   public static readonly AI_USAGE = AI_USAGE;
+  public static readonly MAIL_DELIVERY = MAIL_DELIVERY;
 
   public static readonly ALL = ALL;
 

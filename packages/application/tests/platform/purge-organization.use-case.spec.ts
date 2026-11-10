@@ -232,10 +232,11 @@ describe("PurgeOrganizationUseCase", () => {
       "messages",
       "doc_revision",
       "assistant_messages",
+      "mail_delivery",
       "ai_usage",
     ]);
     expect(parts.archive.calls.every((call) => call.organizationId === TENANT)).toBe(true);
-    expect(result.archived).toBe(6);
+    expect(result.archived).toBe(7);
   });
 
   // The order is the behaviour: archive, then drop, then delete the row. A drop before

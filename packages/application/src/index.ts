@@ -160,7 +160,19 @@ export {
   UploadDocImageUseCase,
 } from "./doc/index.js";
 export { FlagCache, type FlagRecord, FlagRepository, type FlagTarget } from "./flag/index.js";
-export { type SendMailInput, SendMailUseCase } from "./mail/index.js";
+export {
+  type ListMailDeliveriesInput,
+  ListMailDeliveriesUseCase,
+  type MailDeliveryCursor,
+  type MailDeliveryPage,
+  type MailDeliveryRecord,
+  MailDeliveryRepository,
+  type MailDeliveryStatus,
+  type RecordMailDeliveryInput,
+  RecordMailDeliveryUseCase,
+  type SendMailInput,
+  SendMailUseCase,
+} from "./mail/index.js";
 export {
   ChangeMemberRoleUseCase,
   type InvitationMail,

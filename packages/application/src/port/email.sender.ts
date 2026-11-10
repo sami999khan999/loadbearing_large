@@ -8,8 +8,8 @@ export interface EmailMessage {
 }
 
 export interface EmailReceipt {
-  // Null when the transport returns none. This system keeps no delivery table, so the
-  // id exists to be logged and later correlated against a provider's own record.
+  // Null when the transport returns none. Logged and kept in the delivery log, so it can
+  // be correlated later against a provider's own record.
   readonly messageId: string | null;
 }
 

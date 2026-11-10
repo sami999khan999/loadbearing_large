@@ -28,8 +28,8 @@ export interface MailRequest<K extends MailTemplateKey = MailTemplateKey> {
   readonly credential?: boolean;
 }
 
-// What every caller holds. It returns nothing on purpose: there is no delivery row, so a
-// caller reading an id back would be reaching for a record that does not exist.
+// What every caller holds. It returns nothing on purpose: the delivery row is written later, so a
+// caller reading an id back would be reaching for a record that does not exist yet.
 export abstract class MailPublisher {
   public abstract publish<K extends MailTemplateKey>(mail: MailRequest<K>): Promise<void>;
 
