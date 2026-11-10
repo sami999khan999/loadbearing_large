@@ -29,6 +29,9 @@ export const messagingEvents = {
     // Carried so the notification policy can tell a DM from a channel without a second
     // query. A channel produces no bell item — that is the §6 amplification case.
     conversationKind: z.enum(["direct", "channel"]),
+    // The people the body names with a `<@id>` token (`26.7`), at most twenty. Not checked
+    // against the room here: delivery keeps only the ids that are members.
+    mentions: z.array(Identifiers.userId).max(20).default([]),
   }),
   "message.edited": z.object({
     conversationId: Identifiers.conversationId,
