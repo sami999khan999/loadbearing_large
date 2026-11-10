@@ -168,7 +168,14 @@ the word. Every name below is `assistant`.
   - The web `assistant.router.ts`, and `assistant.stream` in `api-server/src/router/` beside
     `realtime.router.ts`.
   - The worker `assistant.consumer.ts` with a BullMQ limiter.
-- **6, usage reporting (large only):**
+- **6, usage reporting (large only)** — **done 2026-11-10.** ClickHouse migration
+  `0001_ai_usage_events`, projected inside the existing five-minute `project` run; the
+  **AI usage** panel on `/platform/analytics` (`platform.assistantUsage`); and a meter on
+  `/assistant` (`assistant.usage`) for the new key `ai.usage.read`, granted to `admin` by the seed
+  and by migration `0058`. **Tokens only, no cost:** nothing in the kit knows a model's price, so
+  pricing is an owner decision. Checked live: carol's fake answer metered 62 + 11 tokens, the
+  projection copied every `ai_usage` row, and the real reader returned them. **The platform panel
+  was not opened in a browser**, since no platform admin could sign in on this machine.
   - Project `ai_usage` into ClickHouse beside `clickhouse-analytics.projector.ts`.
   - A platform **AI usage** panel on the analytics page: tokens and cost by organization, model and
     day.

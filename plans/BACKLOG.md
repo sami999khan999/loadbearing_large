@@ -284,8 +284,8 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   OpenRouter, Gemini and fake adapters) step 2's tables and the repositories over them are
   built, 2026-10-14; steps 3–5 and the permission, 2026-10-19** — use cases, retrieval, the
   Redis answer stream, `realtime.assistant`, the web router, the `assistant` lane, migration
-  `0057`, and the application reference. Usage reporting (6), the client and UI (7), the scale
-  doc and load test (8) are open. **Step 7, the client and UI, built 2026-10-19 and walked over
+  `0057`, and the application reference. Usage reporting (6) built 2026-11-10, tokens only (a price
+  per model is an open decision). The scale doc and load test (8) are open. **Step 7, the client and UI, built 2026-10-19 and walked over
   HTTP only**; owed: the browser walk below, and whether answers render Markdown.
 - [ ] `AI.2` **Walk the Assistant in a browser.** Send, stream, Stop, reload mid-answer, two tabs
   (the second refreshes on `assistant.changed`), rename, delete, a source lost since the answer,
