@@ -30,7 +30,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 1 | 48 |
-| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 5 | 4 |
+| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 4 | 5 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 1 | 8 |
@@ -141,14 +141,6 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 
 - [ ] `26.3` **Web push** — whole or not at all, a third channel in the preference grid.
   — `archive/COMMUNICATION.md:45`
-- [ ] `26.7` **Channel mentions** — what is left of it. Built 2026-11-11: the per-tenant digest
-  hour (`notification_settings`, an hourly run, 07:00 UTC by default, set by
-  `notification.digest.manage` on notification settings); the digest's lines by kind and its
-  opt-out link to preferences; and grouping, a `count` on the one unread item per conversation
-  ("3 new"), counted once per event. **Left:** a mention syntax the composer inserts and the
-  server resolves to members, then a `message.sent` policy row for mentioned channel members.
-  — `archive/COMMUNICATION.md:46`
-
 ---
 
 ## 13. Access and visibility plan — what is left

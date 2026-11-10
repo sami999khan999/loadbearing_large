@@ -2007,10 +2007,19 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   members, shown as "Online now" on the conversation page. **Proof:** lease and presence specs;
   against `pnpm dev`, bob saw carol online while her stream was open and not after it closed.
 
+- [x] `26.7` **Per-tenant digest hour, channel mentions, grouping** `done: 2026-11-11` — the
+  digest hour (`notification_settings`, an hourly run, 07:00 UTC by default); the digest's lines
+  by kind and its opt-out link; grouping, a `count` on the one unread item per conversation,
+  counted once per event; and mentions: the composer inserts `<@id>`, the send carries up to
+  twenty ids, and delivery notifies the members among them as `message.mentioned`. **Proof:**
+  specs at every layer; against `pnpm dev`, a plain channel message notified nobody and a
+  mention of carol reached her inbox.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-11 | @sami | **`26.7` closed:** channel mentions, the last of it |
 | 2026-11-11 | @sami | **`26.6` closed:** stream leases hold the cap across processes, and give presence |
 | 2026-11-11 | @sami | **`26.11` closed:** per-tenant SMTP with a platform default, passwords encrypted |
 | 2026-11-11 | @sami | **`26.10` closed:** the mail delivery log and the platform Mail page |
