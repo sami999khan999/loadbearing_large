@@ -66,6 +66,7 @@ export {
   DashboardZone,
   DeleteTenantPanel,
   DISMISSAL,
+  DigestHourForm,
   DocEditorForm,
   DocGrantPanel,
   DocNavTree,

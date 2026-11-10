@@ -44,6 +44,15 @@ export class NotificationRouter {
     },
   );
 
+  public static readonly digestHour = authed.notification.digestHour.handler(({ context }) =>
+    context.container.notification.digestHour.execute(context.principal),
+  );
+
+  public static readonly updateDigestHour = authed.notification.updateDigestHour.handler(
+    ({ input, context }) =>
+      context.container.notification.updateDigestHour.execute(context.principal, input),
+  );
+
   public static readonly updatePreference = authed.notification.updatePreference.handler(
     async ({ input, context }) => {
       await context.container.notification.updatePreference.execute(context.principal, input);
@@ -62,5 +71,7 @@ export class NotificationRouter {
     markAllRead: NotificationRouter.markAllRead,
     preferences: NotificationRouter.preferences,
     updatePreference: NotificationRouter.updatePreference,
+    digestHour: NotificationRouter.digestHour,
+    updateDigestHour: NotificationRouter.updateDigestHour,
   } as const;
 }
