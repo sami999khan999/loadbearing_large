@@ -140,6 +140,8 @@ export {
   FlagList,
   MailDeliveryList,
   type MailDeliveryListProps,
+  MailSettingsForm,
+  type MailSettingsFormProps,
   ModuleSwitchPanel,
   OrganizationEntitlementPanel,
   PlanForm,

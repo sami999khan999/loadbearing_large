@@ -3,6 +3,7 @@ export { AssistantUsageReportPanel } from "./assistant-usage-report.panel.js";
 export { DeleteTenantPanel } from "./delete-tenant.panel.js";
 export { FlagList } from "./flag.list.js";
 export { MailDeliveryList, type MailDeliveryListProps } from "./mail-delivery.list.js";
+export { MailSettingsForm, type MailSettingsFormProps } from "./mail-settings.form.js";
 export { ModuleSwitchPanel } from "./module-switch.panel.js";
 export { OrganizationEntitlementPanel } from "./organization-entitlement.panel.js";
 export { PlanForm, type PlanFormProps } from "./plan.form.js";
