@@ -102,6 +102,7 @@ export {
   PlanList,
   PlatformNav,
   PlatformStatusPanel,
+  PresenceNotice,
   ProfileForm,
   ProjectionGapsPanel,
   ProjectionPolicyForm,

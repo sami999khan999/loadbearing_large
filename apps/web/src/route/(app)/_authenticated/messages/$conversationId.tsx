@@ -5,6 +5,7 @@ import {
   MessageComposer,
   MessageList,
   MessagingQueries,
+  PresenceNotice,
   TypingNotice,
   useApiClient,
   useAppQuery,
@@ -58,6 +59,7 @@ function Conversation() {
   return (
     <main>
       <h1>{entity?.displayTitle(user?.id ?? "") ?? t("messaging.inbox.title")}</h1>
+      <PresenceNotice conversationId={conversationId} nameFor={nameFor} selfId={user?.id} />
       <MessageList conversationId={conversationId} nameFor={nameFor} />
       <TypingNotice typing={typing} nameFor={nameFor} />
       <MessageComposer conversationId={conversationId} />
