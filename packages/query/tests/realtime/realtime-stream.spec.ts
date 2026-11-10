@@ -131,4 +131,31 @@ describe("RealtimeStream", () => {
 
     expect(frames[0]).toEqual(FRAME_A);
   });
+
+  // `RV.3`: an unlogged frame cannot be resumed from, and what it carried is refetched
+  // on every reopen instead.
+  it("never resumes from an unlogged frame, and calls onReopened on each reopen only", async () => {
+    const calls: (string | undefined)[] = [];
+    const unlogged = { id: "00000000-0000-7000-8000-00000000000d", kind: "event", replay: false };
+    let reopened = 0;
+    const controller = new AbortController();
+    void RealtimeStream.run<Frame & { readonly replay?: boolean }>({
+      open: (_signal, lastEventId) => {
+        calls.push(lastEventId);
+        return calls.length === 1 ? ending([FRAME_A, unlogged]) : parked();
+      },
+      onFrame: () => {},
+      onConnected: () => {},
+      onReopened: () => {
+        reopened += 1;
+      },
+      signal: controller.signal,
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(calls).toEqual([undefined, FRAME_A.id]);
+    expect(reopened).toBe(1);
+    controller.abort();
+  });
 });

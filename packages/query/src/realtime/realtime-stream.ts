@@ -19,6 +19,9 @@ export interface RealtimeStreamOptions<T extends { readonly id: string; readonly
   // Which frames a reopen may resume from. Realtime's: an `event`, the only kind it logs.
   // A log that keeps every frame resumes from any, and one never seen reopens from the start.
   readonly resumesFrom?: (frame: T) => boolean;
+  // Each open after the first, once connected: what an unlogged frame missed while away is
+  // refetched here, since no resume can replay it.
+  readonly onReopened?: () => void;
   // A frame after which there is nothing more to wait for: the loop ends instead of reopening.
   readonly endsWith?: (frame: T) => boolean;
 }
@@ -28,9 +31,9 @@ export interface RealtimeStreamOptions<T extends { readonly id: string; readonly
 export class RealtimeStream {
   private constructor() {}
 
-  public static async run<T extends { readonly id: string; readonly kind: string }>(
-    options: RealtimeStreamOptions<T>,
-  ): Promise<void> {
+  public static async run<
+    T extends { readonly id: string; readonly kind: string; readonly replay?: boolean },
+  >(options: RealtimeStreamOptions<T>): Promise<void> {
     const { signal } = options;
     const resumesFrom = options.resumesFrom;
     let attempt = 0;
@@ -46,6 +49,7 @@ export class RealtimeStream {
           signal,
           opened && !resumesFrom ? (lastEventId ?? RealtimeStream.anyId()) : lastEventId,
         );
+        if (opened) options.onReopened?.();
         opened = true;
         options.onConnected(true);
 
@@ -53,7 +57,7 @@ export class RealtimeStream {
           if (signal.aborted) return;
           // Only an event is in the server's replay log. A typing or resync id resumed from
           // nothing, so every reopen in a busy conversation became a full resync.
-          if (resumesFrom ? resumesFrom(frame) : frame.kind === "event") lastEventId = frame.id;
+          if (RealtimeStream.resumable(frame, resumesFrom)) lastEventId = frame.id;
           options.onFrame(frame);
           if (options.endsWith?.(frame)) {
             options.onConnected(false);
@@ -81,6 +85,15 @@ export class RealtimeStream {
       options.onConnected(false);
       await RealtimeStream.sleep(delay, signal);
     }
+  }
+
+  // Realtime's default: an `event`, unless it says it was kept out of the log.
+  private static resumable<T extends { readonly kind: string; readonly replay?: boolean }>(
+    frame: T,
+    resumesFrom: ((frame: T) => boolean) | undefined,
+  ): boolean {
+    if (resumesFrom) return resumesFrom(frame);
+    return frame.kind === "event" && frame.replay !== false;
   }
 
   // Full jitter, so a thousand tabs dropped by one deploy do not come back in step.
