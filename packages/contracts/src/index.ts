@@ -161,6 +161,8 @@ export {
   type NotificationMode,
   type NotificationPreferenceDto,
   NotificationProcedures,
+  type PushEndpointInput,
+  type PushSubscriptionInput,
   type UpdateNotificationPreferenceInput,
 } from "./notification/index.js";
 export {
