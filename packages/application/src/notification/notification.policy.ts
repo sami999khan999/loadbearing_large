@@ -43,7 +43,7 @@ const ROWS = Object.freeze({
     kind: "member.joined",
     category: "membership",
     recipients: { kind: "none" },
-    defaultMode: { in_app: "off", email: "off" },
+    defaultMode: { in_app: "off", email: "off", push: "off" },
     link: () => null,
   },
   "member.joined": {
@@ -52,7 +52,7 @@ const ROWS = Object.freeze({
     // The people who can act on it. Not the whole organization: that is the write
     // amplification `data-and-scale.md` §6 warns about, per joiner.
     recipients: { kind: "organizationMembers", holding: "member.invite" },
-    defaultMode: { in_app: "immediate", email: "digest" },
+    defaultMode: { in_app: "immediate", email: "digest", push: "off" },
     link: () => "/settings/members",
   },
   "member.role.changed": {
@@ -61,7 +61,7 @@ const ROWS = Object.freeze({
     // The person it happened to. What they may do just changed, which is the one thing
     // they cannot discover by looking.
     recipients: { kind: "subject" },
-    defaultMode: { in_app: "immediate", email: "immediate" },
+    defaultMode: { in_app: "immediate", email: "immediate", push: "off" },
     link: () => "/settings/members",
   },
   "message.sent": {
@@ -70,7 +70,7 @@ const ROWS = Object.freeze({
     recipients: { kind: "conversationMembers" },
     // In-app at once, email once a day. A DM is worth interrupting a screen for and is
     // almost never worth interrupting an inbox for.
-    defaultMode: { in_app: "immediate", email: "digest" },
+    defaultMode: { in_app: "immediate", email: "digest", push: "immediate" },
     link: (event) =>
       "conversationId" in event.payload ? `/messages/${event.payload.conversationId}` : null,
     // One unread bell item per conversation. Without this a burst of ten messages is ten
@@ -90,7 +90,7 @@ const MENTION_ROW: PolicyRow = Object.freeze<PolicyRow>({
   category: "messaging",
   recipients: { kind: "mentionedMembers" },
   // Named is worth interrupting a screen for, and an inbox at once rather than tomorrow.
-  defaultMode: { in_app: "immediate", email: "immediate" },
+  defaultMode: { in_app: "immediate", email: "immediate", push: "immediate" },
   link: (event: DomainEvent) =>
     "conversationId" in event.payload ? `/messages/${event.payload.conversationId}` : null,
   // One unread mention item per room, counted, as direct messages are.
@@ -123,7 +123,7 @@ const DEFAULT_BY_CATEGORY: Readonly<
       return found;
     }
 
-    for (const channel of ["in_app", "email"] as const) {
+    for (const channel of ["in_app", "email", "push"] as const) {
       const mine = LOUDNESS.indexOf(row.defaultMode[channel]);
       if (mine < LOUDNESS.indexOf(current[channel])) current[channel] = row.defaultMode[channel];
     }

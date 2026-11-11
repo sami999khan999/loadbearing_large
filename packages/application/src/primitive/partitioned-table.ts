@@ -17,6 +17,7 @@ const ASSISTANT_THREADS = "assistant_threads";
 const ASSISTANT_MESSAGES = "assistant_messages";
 const AI_USAGE = "ai_usage";
 const MAIL_DELIVERY = "mail_delivery";
+const PUSH_SUBSCRIPTIONS = "push_subscriptions";
 
 // The column the table is ranged by. A closed union rather than `string`: it is inlined
 // into DDL and into every predicate that wants a partition pruned.
@@ -170,6 +171,13 @@ const ALL = Object.freeze([
     column: "created_at",
     retentionMonths: 13,
   }),
+  // A browser per person (`26.3`): it grows with the tenant's devices, never with the calendar.
+  Object.freeze({
+    name: PUSH_SUBSCRIPTIONS,
+    tenantKey: "organization_id",
+    column: null,
+    retentionMonths: null,
+  }),
   Object.freeze({
     name: AI_USAGE,
     tenantKey: "organization_id",
@@ -225,6 +233,7 @@ export class PartitionedTable {
   public static readonly ASSISTANT_MESSAGES = ASSISTANT_MESSAGES;
   public static readonly AI_USAGE = AI_USAGE;
   public static readonly MAIL_DELIVERY = MAIL_DELIVERY;
+  public static readonly PUSH_SUBSCRIPTIONS = PUSH_SUBSCRIPTIONS;
 
   public static readonly ALL = ALL;
 

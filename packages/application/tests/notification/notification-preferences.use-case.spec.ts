@@ -59,15 +59,16 @@ describe("GetNotificationPreferencesUseCase", () => {
 
     const resolved = await useCase.execute(actorHolding("notification.inbox.read"));
 
-    // Every category the policy names, times both channels — the complete grid, not the
-    // stored rows. A form rendering only what was saved shows an empty screen on day one.
+    // Every category the policy names, times the three channels — the complete grid, not
+    // the stored rows. A form rendering only what was saved shows an empty screen on day one.
     expect(resolved.map((entry) => entry.category)).toEqual([
-      "membership",
-      "membership",
-      "messaging",
-      "messaging",
+      ...Array(3).fill("membership"),
+      ...Array(3).fill("messaging"),
     ]);
-    expect(resolved.map((entry) => entry.channel)).toEqual(["in_app", "email", "in_app", "email"]);
+    expect(resolved.map((entry) => entry.channel)).toEqual([
+      ...["in_app", "email", "push"],
+      ...["in_app", "email", "push"],
+    ]);
     expect(resolved.every((entry) => entry.mode !== undefined)).toBe(true);
   });
 
@@ -151,7 +152,10 @@ describe("UpdateNotificationPreferenceUseCase", () => {
     const useCase = new GetNotificationPreferencesUseCase(new Authorizer(), new Preferences());
 
     return useCase.execute(actorHolding("notification.inbox.read")).then((resolved) => {
-      const membership = resolved.filter((row) => row.category === "membership");
+      // Push is off for membership on purpose (`26.3`): a role change is not worth a buzz.
+      const membership = resolved.filter(
+        (row) => row.category === "membership" && row.channel !== "push",
+      );
 
       expect(membership).not.toHaveLength(0);
       for (const row of membership) expect(row.mode).not.toBe("off");

@@ -53,6 +53,7 @@ export {
   type TenantExport,
 } from "./partition-archive.gateway.js";
 export { PresenceReader } from "./presence.reader.js";
+export { type PushPayload, PushSender, type PushTarget } from "./push.sender.js";
 export { type JobOptions, type QueuedJob, QueuePublisher } from "./queue.publisher.js";
 export { RateLimitStore } from "./rate-limit.store.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
