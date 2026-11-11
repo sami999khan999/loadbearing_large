@@ -143,6 +143,7 @@ export {
   ListTenantExportImagesUseCase,
   ListTenantExportsUseCase,
   ListTenantStorageUseCase,
+  ListThreadUseCase,
   LocateTenantUseCase,
   type LogEntry,
   type LogQuery,

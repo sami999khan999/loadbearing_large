@@ -137,6 +137,7 @@ import {
   ListTenantExportImagesUseCase,
   ListTenantExportsUseCase,
   ListTenantStorageUseCase,
+  ListThreadUseCase,
   LocateTenantUseCase,
   type Logger,
   type LogReader,
@@ -627,6 +628,7 @@ export class Container {
     readonly markRead: MarkConversationReadUseCase;
     readonly listMessages: ListMessagesUseCase;
     readonly react: ReactToMessageUseCase;
+    readonly listThread: ListThreadUseCase;
     // Files on a message (`26.1`): a signed upload, then a signed link to open one.
     readonly requestAttachmentUpload: RequestAttachmentUploadUseCase;
     readonly openAttachment: OpenAttachmentUseCase;
@@ -1242,6 +1244,13 @@ export class Container {
         this.routedUnitOfWork,
       ),
       listMessages: new ListMessagesUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        messageReactions,
+        messageAttachments,
+      ),
+      listThread: new ListThreadUseCase(
         this.authorizer,
         conversationAccess,
         messages,
