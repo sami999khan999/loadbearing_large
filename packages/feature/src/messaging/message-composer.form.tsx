@@ -18,13 +18,22 @@ export interface MessageComposerProps {
   readonly conversationId: string;
   // The room's other members, for the mention picker (`26.7`). Absent shows no picker.
   readonly mentionable?: readonly { readonly userId: string; readonly name: string }[];
+  // Set, and every send is a reply to that root (`26.1`).
+  readonly parent?: { readonly messageId: string; readonly createdAt: Date };
+  // After the server took it: a thread refetches, since replies have no optimistic row.
+  readonly onSent?: () => void;
 }
 
 // Matches the use-case's own rate limit. Throttling here as well keeps the request off
 // the wire rather than having the server refuse it forty times a sentence.
 const TYPING_INTERVAL_MS = 2_000;
 
-export function MessageComposer({ conversationId, mentionable = [] }: MessageComposerProps) {
+export function MessageComposer({
+  conversationId,
+  mentionable = [],
+  parent,
+  onSent,
+}: MessageComposerProps) {
   const { t } = useMessages("messaging");
   const describe = useErrorMessage();
   const client = useApiClient();
@@ -50,12 +59,18 @@ export function MessageComposer({ conversationId, mentionable = [] }: MessageCom
 
     // The client generates the key, which is both the optimistic id and the dedupe key:
     // a retried send carries the same one and produces one row.
-    send.mutate({
-      conversationId,
-      body: trimmed,
-      clientId: crypto.randomUUID(),
-      attachments: [...files],
-    });
+    send.mutate(
+      {
+        conversationId,
+        body: trimmed,
+        clientId: crypto.randomUUID(),
+        attachments: [...files],
+        ...(parent
+          ? { parent: { messageId: parent.messageId as never, createdAt: parent.createdAt } }
+          : {}),
+      },
+      onSent ? { onSuccess: onSent } : undefined,
+    );
     setBody("");
     setFiles([]);
   };
