@@ -40,6 +40,7 @@ export { PgPersonalOrganizationEnroller } from "./pg-personal-organization.enrol
 export { PgPlatformReader } from "./pg-platform.reader.js";
 export { PgPlatformPolicyRepository } from "./pg-platform-policy.repository.js";
 export { PgProjectionPolicyRepository } from "./pg-projection-policy.repository.js";
+export { PgPushSubscriptionRepository } from "./pg-push-subscription.repository.js";
 export { PgRetentionPolicyRepository } from "./pg-retention-policy.repository.js";
 export { PgRoleRepository } from "./pg-role.repository.js";
 export { PgShardResolver } from "./pg-shard.resolver.js";

@@ -470,6 +470,13 @@
       "when": 1794427526778,
       "tag": "0066_message_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794429386562,
+      "tag": "0067_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

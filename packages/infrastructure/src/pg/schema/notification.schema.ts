@@ -106,6 +106,26 @@ export const notificationPreferences = pgTable(
   ],
 );
 
+// One row per browser a person allowed push in (`26.3`), by tenant only: it grows with
+// devices, never with the calendar. Keyed by the endpoint, which the push service owns.
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").notNull(),
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    userId: uuid("user_id").$type<UserId>().notNull(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.id, t.organizationId] }),
+    uniqueIndex("push_subscriptions_endpoint_uq").on(t.organizationId, t.endpoint),
+    index("push_subscriptions_user_fk_idx").on(t.organizationId, t.userId),
+  ],
+);
+
 // A tenant's notification settings (`26.7`): the UTC hour its digest goes out. Catalog, so
 // the hourly fan-out filters tenants by it in the same query that pages them.
 export const notificationSettings = pgTable(

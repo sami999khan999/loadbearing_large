@@ -51,6 +51,7 @@ export {
   PgPlatformPolicyRepository,
   PgPlatformReader,
   PgProjectionPolicyRepository,
+  PgPushSubscriptionRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgShardAssignmentRepository,

@@ -205,6 +205,11 @@ export {
   type ProjectionGap,
   type ProjectionPolicyRecord,
   type ProjectionPolicyRepository,
+  type PushPayload,
+  PushSender,
+  type PushSubscriptionRecord,
+  type PushSubscriptionRepository,
+  type PushTarget,
   type QueueControlGateway,
   type QueueCounts,
   type QueuedJob,
@@ -408,10 +413,8 @@ export type { Nodes as MdastNodes, Root as MdastRoot } from "mdast";
 // Its types ship separately and are pinned to the same major: a `@types/nodemailer` a
 // major behind describes a `sendMail` that is *almost* the one being called.
 export { createTransport, type Transporter } from "nodemailer";
-
 // ── pg ───────────────────────────────────────────────────────────────────────
 export { Pool } from "pg";
-
 // ── rehype · remark · unified ────────────────────────────────────────────────
 // The doc renderer's pipeline. Named here once, so a swap of Markdown library is this
 // block and `src/unified/`, and nothing else.
@@ -429,3 +432,6 @@ export { default as remarkParse } from "remark-parse";
 export { default as remarkRehype } from "remark-rehype";
 export { unified } from "unified";
 export { visit } from "unist-util-visit";
+// ── web-push ─────────────────────────────────────────────────────────────────
+// CommonJS with no named exports Node can see, so the default object; types pinned to 3.x.
+export { default as webPush } from "web-push";
