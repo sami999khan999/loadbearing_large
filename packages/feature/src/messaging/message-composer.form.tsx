@@ -3,6 +3,8 @@ import { useMessages } from "../i18n/index.js";
 import {
   Button,
   Callout,
+  type MessageAttachmentType,
+  MessageContract,
   MessagingMutations,
   Select,
   Textarea,
@@ -31,16 +33,31 @@ export function MessageComposer({ conversationId, mentionable = [] }: MessageCom
   const lastTypedAt = useRef(0);
 
   const send = MessagingMutations.useSend(client, conversationId);
+  const upload = MessagingMutations.useUploadAttachment(client);
+  // Uploaded and waiting for the send that names them (`26.1`).
+  const [files, setFiles] = useState<
+    readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly contentType: MessageAttachmentType;
+    }[]
+  >([]);
   const typing = MessagingMutations.useStartTyping(client);
 
   const submit = () => {
     const trimmed = body.trim();
-    if (trimmed.length === 0) return;
+    if (trimmed.length === 0 && files.length === 0) return;
 
     // The client generates the key, which is both the optimistic id and the dedupe key:
     // a retried send carries the same one and produces one row.
-    send.mutate({ conversationId, body: trimmed, clientId: crypto.randomUUID() });
+    send.mutate({
+      conversationId,
+      body: trimmed,
+      clientId: crypto.randomUUID(),
+      attachments: [...files],
+    });
     setBody("");
+    setFiles([]);
   };
 
   const signal = () => {
@@ -91,7 +108,49 @@ export function MessageComposer({ conversationId, mentionable = [] }: MessageCom
         />
       ) : null}
 
-      <Button type="submit" variant="primary" disabled={body.trim().length === 0}>
+      <label className="ui-attach">
+        <span>{t("messaging.attachment.add")}</span>
+        <input
+          type="file"
+          accept={MessageContract.attachmentType.options.join(",")}
+          disabled={upload.isPending || files.length >= 5}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            upload.mutate(
+              { conversationId, file },
+              { onSuccess: (attached) => setFiles((current) => [...current, attached]) },
+            );
+          }}
+        />
+      </label>
+      {files.length > 0 ? (
+        <ul className="flex flex-wrap gap-1">
+          {files.map((file) => (
+            <li key={file.id}>
+              <Button
+                variant="secondary"
+                aria-label={t("messaging.attachment.remove", { name: file.name })}
+                onClick={() => setFiles((current) => current.filter((item) => item.id !== file.id))}
+              >
+                {`${file.name} ×`}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {upload.isError ? (
+        <Callout tone="danger">
+          {describe(upload.error)?.message ?? t("messaging.attachment.failed")}
+        </Callout>
+      ) : null}
+
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={(body.trim().length === 0 && files.length === 0) || upload.isPending}
+      >
         {t("messaging.compose.send")}
       </Button>
 

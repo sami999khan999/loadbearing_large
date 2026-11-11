@@ -59,6 +59,8 @@ export {
   type MailDeliveryDto,
   type MailSettingsDto,
   type MemberDto,
+  type MessageAttachmentType,
+  MessageContract,
   type MessageDto,
   type MessageEmoji,
   type NotificationDto,

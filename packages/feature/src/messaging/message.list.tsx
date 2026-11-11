@@ -12,6 +12,7 @@ import {
   useAppInfiniteQuery,
   useMemo,
 } from "../import.js";
+import { AttachmentList } from "./attachment.list.js";
 import { MentionText } from "./mention-text.js";
 import { ReactionBar } from "./reaction.bar.js";
 
@@ -84,7 +85,12 @@ export function MessageList({ conversationId, nameFor }: MessageListProps) {
             {
               // Not on a row the server has not confirmed: its id is the client's, and a
               // reaction to it would name a message that does not exist.
-              row.deleted || row.id === row.clientId ? null : <ReactionBar message={row} />
+              row.deleted || row.id === row.clientId ? null : (
+                <>
+                  <AttachmentList message={row} />
+                  <ReactionBar message={row} />
+                </>
+              )
             }
           </li>
         ))}
