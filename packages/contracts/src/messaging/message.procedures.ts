@@ -37,10 +37,22 @@ export class MessageProcedures {
     .input(MessageContract.react)
     .output(Envelope.acknowledged);
 
+  public static readonly attachmentUpload = oc
+    .route({ method: "POST", path: "/messages/attachments" })
+    .input(MessageContract.attachmentUpload)
+    .output(MessageContract.attachmentUploaded);
+
+  public static readonly attachmentUrl = oc
+    .route({ method: "GET", path: "/messages/attachments/{attachmentId}" })
+    .input(MessageContract.attachmentLink)
+    .output(MessageContract.attachmentUrl);
+
   public static readonly all = {
     list: MessageProcedures.list,
     send: MessageProcedures.send,
     react: MessageProcedures.react,
+    attachmentUpload: MessageProcedures.attachmentUpload,
+    attachmentUrl: MessageProcedures.attachmentUrl,
     edit: MessageProcedures.edit,
     remove: MessageProcedures.remove,
     typing: MessageProcedures.typing,

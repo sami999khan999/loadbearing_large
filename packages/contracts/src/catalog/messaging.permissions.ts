@@ -18,6 +18,9 @@ export const messagingProcedurePermissions = {
   "message.send": "messaging.message.send",
   // Reacting is saying something in the room, so it is gated as a message is.
   "message.react": "messaging.message.send",
+  // Uploading is the first half of sending; opening a file is reading the room.
+  "message.attachmentUpload": "messaging.message.send",
+  "message.attachmentUrl": "messaging.conversation.read",
   "message.edit": "messaging.message.update",
   "message.remove": "messaging.message.update",
   // Typing is a read-shaped act: it says you are in the conversation, and someone who

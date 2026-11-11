@@ -114,6 +114,8 @@ export {
   type SetMemberActiveInput,
 } from "./member/index.js";
 export {
+  type AttachmentLinkInput,
+  type AttachmentUploadDto,
   ConversationContract,
   type ConversationDto,
   ConversationEntity,
@@ -129,6 +131,8 @@ export {
   type ListConversationsInput,
   type ListMessagesInput,
   type MarkConversationReadInput,
+  type MessageAttachmentDto,
+  type MessageAttachmentType,
   MessageContract,
   type MessageDto,
   type MessageEmoji,
@@ -137,6 +141,7 @@ export {
   MessageProcedures,
   type ReactToMessageInput,
   type RenameConversationInput,
+  type RequestAttachmentUploadInput,
   type SendMessageInput,
   type TypingInput,
 } from "./messaging/index.js";

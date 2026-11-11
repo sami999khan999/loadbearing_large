@@ -50,6 +50,7 @@ const message = (over: Partial<MessageDto> = {}): MessageDto => ({
   editedAt: null,
   createdAt: new Date("2026-09-03T00:00:00Z"),
   reactions: [],
+  attachments: [],
   ...over,
 });
 
