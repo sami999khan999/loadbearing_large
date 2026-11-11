@@ -60,6 +60,30 @@ export class MessagingQueries {
     });
   }
 
+  // A root's replies, oldest first (`26.1`); the next page is newer, as a thread reads.
+  public static thread(
+    client: ApiClient,
+    root: { readonly conversationId: string; readonly id: string; readonly createdAt: Date },
+  ) {
+    return infiniteQueryOptions({
+      queryKey: QueryKeys.message.thread(root.id),
+      queryFn: ({ pageParam, signal }) =>
+        client.message.thread(
+          {
+            conversationId: root.conversationId,
+            messageId: root.id,
+            createdAt: root.createdAt,
+            ...(pageParam ? { after: pageParam } : {}),
+          },
+          { signal },
+        ),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (last: { readonly newerCursor: string | null }) =>
+        last.newerCursor ?? undefined,
+      staleTime: 0,
+    });
+  }
+
   // One page, not every loaded one: a new message only lands on the newest, and refetching
   // them all cost a request per page per member per message.
   public static async refreshNewest(

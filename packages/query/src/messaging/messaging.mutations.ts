@@ -31,14 +31,18 @@ export class MessagingMutations {
       invalidates: [QueryKeys.conversation.all()],
       optimistic: {
         queryKey: QueryKeys.message.list(conversationId),
-        apply: (cached, input) => ({
-          ...cached,
-          pages: cached.pages.map((page, index) =>
-            index === 0
-              ? { ...page, items: [MessagingMutations.pending(input), ...page.items] }
-              : page,
-          ),
-        }),
+        // A reply belongs to its thread, never the room's own list (`26.1`).
+        apply: (cached, input) =>
+          input.parent
+            ? cached
+            : {
+                ...cached,
+                pages: cached.pages.map((page, index) =>
+                  index === 0
+                    ? { ...page, items: [MessagingMutations.pending(input), ...page.items] }
+                    : page,
+                ),
+              },
       },
     });
   }

@@ -91,6 +91,8 @@ export class QueryKeys {
     // The cursor is not in the key, as everywhere else: it lives in the page data, and a
     // key that carried it would make every page a separate entry nothing invalidates.
     list: (conversationId: string) => ["message", "list", conversationId] as const,
+    // Under `message`, so a frame that invalidates the room's messages reaches its threads.
+    thread: (messageId: string) => ["message", "thread", messageId] as const,
   };
 
   // Above the tenant, so nothing here is keyed by organization: switching tenants
