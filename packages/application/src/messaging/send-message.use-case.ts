@@ -3,6 +3,7 @@ import {
   ConflictError,
   type ConversationKind,
   type MessageId,
+  NotFoundError,
   type SendMessageInput,
   type UserId,
   Uuid,
@@ -62,6 +63,7 @@ export class SendMessageUseCase {
     // Before the claim, so a file that never arrived fails the send cleanly and a retry
     // after uploading it again is not mistaken for a duplicate.
     const sizes = await this.sizesOf(actor, input);
+    await this.assertRoot(actor, input);
 
     // Generated here, not in the repository: the dedupe key holds them, which is what
     // lets a retry be handed the row the first attempt wrote.
@@ -153,6 +155,8 @@ export class SendMessageUseCase {
       authorId: actor.userId,
       clientId: input.clientId,
       body: input.body,
+      parentId: input.parent?.messageId ?? null,
+      parentCreatedAt: input.parent?.createdAt ?? null,
     });
 
     await this.conversations.touch(
@@ -194,6 +198,20 @@ export class SendMessageUseCase {
 
     // Only when there are some, so a retry's answer (which reads no files) matches.
     return attachments.length > 0 ? { ...message, attachments } : message;
+  }
+
+  // A reply answers a root in the same room, never another reply: threads are one level
+  // deep (`26.1`), so a thread is read in one query and a root's count is one number.
+  private async assertRoot(actor: Principal, input: SendMessageInput): Promise<void> {
+    if (!input.parent) return;
+    const root = await this.messages.findById(
+      actor.organizationId,
+      input.conversationId,
+      input.parent.messageId,
+      input.parent.createdAt,
+    );
+    if (!root || root.deleted) throw new NotFoundError("message", input.parent.messageId);
+    if (root.parentId !== null) throw new ValidationError([{ field: "parent", rule: "nested" }]);
   }
 
   // Each named upload's stored size, read from storage: a file that is not there is a

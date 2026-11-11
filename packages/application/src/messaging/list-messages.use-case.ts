@@ -38,7 +38,7 @@ export class ListMessagesUseCase {
     const times = page.items.map((item) => item.createdAt.getTime());
     const [from, to] = [new Date(Math.min(...times)), new Date(Math.max(...times))];
     const ids = page.items.map((item) => item.id);
-    const [summaries, files] = await Promise.all([
+    const [summaries, files, replies] = await Promise.all([
       this.reactions?.summaries(
         actor.organizationId,
         input.conversationId,
@@ -48,6 +48,7 @@ export class ListMessagesUseCase {
         actor.userId,
       ),
       this.attachments?.forMessages(actor.organizationId, input.conversationId, ids, from, to),
+      this.messages.replyCounts(actor.organizationId, input.conversationId, ids, from),
     ]);
     return {
       ...page,
@@ -55,6 +56,7 @@ export class ListMessagesUseCase {
         ...item,
         reactions: summaries?.get(item.id) ?? [],
         attachments: files?.get(item.id) ?? [],
+        replyCount: replies.get(item.id) ?? 0,
       })),
     };
   }

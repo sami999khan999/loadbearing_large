@@ -73,6 +73,7 @@ export {
   type ListDocPagesInput,
   type ListMessagesInput,
   type ListNotificationsInput,
+  type ListThreadInput,
   type MailTemplateKey,
   type MailTemplateParams,
   MailTemplates,

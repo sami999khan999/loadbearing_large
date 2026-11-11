@@ -228,6 +228,7 @@ export {
   LeaveConversationUseCase,
   ListConversationsUseCase,
   ListMessagesUseCase,
+  ListThreadUseCase,
   MarkConversationReadUseCase,
   MessageAttachmentKey,
   type MessageAttachmentRecord,
@@ -250,6 +251,7 @@ export {
   RequestAttachmentUploadUseCase,
   SendMessageUseCase,
   SignalTypingUseCase,
+  type ThreadPageResult,
   type UnreadCount,
   WatchConversationUseCase,
 } from "./messaging/index.js";

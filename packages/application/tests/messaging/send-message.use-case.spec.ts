@@ -345,3 +345,43 @@ describe("SendMessageUseCase, with attachments", () => {
     expect(messages.saved).toEqual([]);
   });
 });
+
+// `26.1`: a reply names a live root in the same room, and threads are one level deep.
+describe("SendMessageUseCase, a reply", () => {
+  const ROOT = "018f8c00-0000-7000-8000-0000000000a9" as MessageId;
+  const reply = { ...input, parent: { messageId: ROOT, createdAt: NOW } };
+
+  const withRoot = (root: MessageRecord | null) => {
+    const messages = new Messages();
+    messages.findById = (_org: unknown, _conversation: unknown, id: MessageId) =>
+      Promise.resolve(id === ROOT ? root : null);
+    return build(new Conversations(), messages);
+  };
+
+  it("saves the reply under its root", async () => {
+    const harness = withRoot(message({ id: ROOT }));
+
+    await harness.useCase.execute(principal(), reply);
+
+    expect(harness.messages.saved[0]).toMatchObject({ parentId: ROOT, parentCreatedAt: NOW });
+  });
+
+  it("refuses a root that is not there or was deleted", async () => {
+    for (const root of [null, message({ id: ROOT, deleted: true })]) {
+      const harness = withRoot(root);
+      await expect(harness.useCase.execute(principal(), reply)).rejects.toThrow("NOT_FOUND");
+      expect(harness.messages.saved).toEqual([]);
+    }
+  });
+
+  it("refuses a reply to a reply", async () => {
+    const harness = withRoot(
+      message({ id: ROOT, parentId: "018f8c00-0000-7000-8000-0000000000aa" as MessageId }),
+    );
+
+    await expect(harness.useCase.execute(principal(), reply)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(harness.messages.saved).toEqual([]);
+  });
+});

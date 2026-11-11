@@ -64,6 +64,7 @@ export const message = (over: Partial<MessageRecord> = {}): MessageRecord => ({
   deleted: false,
   editedAt: null,
   createdAt: NOW,
+  parentId: null,
   ...over,
 });
 

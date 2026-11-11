@@ -26,6 +26,7 @@ export {
   ListConversationsUseCase,
 } from "./list-conversations.use-case.js";
 export { ListMessagesUseCase } from "./list-messages.use-case.js";
+export { ListThreadUseCase } from "./list-thread.use-case.js";
 export { MarkConversationReadUseCase } from "./mark-conversation-read.use-case.js";
 export {
   type MessagePageResult,
@@ -34,6 +35,7 @@ export {
   MessageRepository,
   type NewMessage,
   type ReactionSummary,
+  type ThreadPageResult,
   type UnreadCount,
 } from "./message.repository.js";
 export {

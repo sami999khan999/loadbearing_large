@@ -8,6 +8,7 @@ import {
   CONVERSATION,
   conversation,
   membershipFrom,
+  message,
   NOW,
   principal,
 } from "./messaging-harness.js";
@@ -45,5 +46,24 @@ describe("ListMessagesUseCase", () => {
 
     expect(page).toEqual({ items: [], olderCursor: null });
     expect(queries).toEqual([]);
+  });
+
+  // `26.1`: each root carries how many live replies it has, read in one query for the page.
+  it("counts each root's replies", async () => {
+    const root = message();
+    const messages = {
+      list: () => Promise.resolve({ items: [root], olderCursor: null }),
+      replyCounts: () => Promise.resolve(new Map([[root.id, 3]])),
+    } as unknown as MessageRepository;
+    const access = new ConversationAccess({
+      findMembership: membershipFrom(() => Promise.resolve(conversation({ lastMessageAt: NOW }))),
+    } as unknown as ConversationRepository);
+
+    const page = await new ListMessagesUseCase(authorizer, access, messages).execute(principal(), {
+      conversationId: CONVERSATION,
+      limit: 30,
+    });
+
+    expect(page.items[0]?.replyCount).toBe(3);
   });
 });
