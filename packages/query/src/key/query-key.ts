@@ -74,6 +74,9 @@ export class QueryKeys {
     unreadCount: () => ["notification", "unreadCount"] as const,
     preferences: () => ["notification", "preferences"] as const,
     digestHour: () => ["notification", "digest-hour"] as const,
+    pushKey: () => ["notification", "push", "key"] as const,
+    // This browser's own subscription, read from the browser rather than the server.
+    pushDevice: () => ["notification", "push", "device"] as const,
   };
 
   // Two namespaces rather than one: a conversation list and the messages inside one
