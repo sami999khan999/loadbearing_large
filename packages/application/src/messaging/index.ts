@@ -37,14 +37,21 @@ export {
   type UnreadCount,
 } from "./message.repository.js";
 export {
+  type MessageAttachmentRecord,
+  MessageAttachmentRepository,
+} from "./message-attachment.repository.js";
+export { MessageAttachmentKey } from "./message-attachment-key.js";
+export {
   type MessageReactionKey,
   MessageReactionRepository,
 } from "./message-reaction.repository.js";
 export { MessagingRules } from "./messaging.rules.js";
 export { MessagingRealtimeSubscriber } from "./messaging-realtime.subscriber.js";
+export { OpenAttachmentUseCase } from "./open-attachment.use-case.js";
 export { ReactToMessageUseCase } from "./react-to-message.use-case.js";
 export { RemoveConversationMemberUseCase } from "./remove-conversation-member.use-case.js";
 export { RenameConversationUseCase } from "./rename-conversation.use-case.js";
+export { RequestAttachmentUploadUseCase } from "./request-attachment-upload.use-case.js";
 export { SendMessageUseCase } from "./send-message.use-case.js";
 export { SignalTypingUseCase } from "./signal-typing.use-case.js";
 export {

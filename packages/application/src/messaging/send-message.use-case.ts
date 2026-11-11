@@ -6,17 +6,21 @@ import {
   type SendMessageInput,
   type UserId,
   Uuid,
+  ValidationError,
 } from "../import.js";
 import type {
   CacheStore,
   DomainEventPublisher,
   RealtimePublisher,
+  StorageGateway,
   UnitOfWork,
 } from "../port/index.js";
 import { type Authorizer, type Principal, RealtimeChannels } from "../primitive/index.js";
 import type { ConversationRepository } from "./conversation.repository.js";
 import type { ConversationAccess } from "./conversation-access.js";
 import type { MessageRecord, MessageRepository } from "./message.repository.js";
+import type { MessageAttachmentRepository } from "./message-attachment.repository.js";
+import { MessageAttachmentKey } from "./message-attachment-key.js";
 
 // A day. Long enough that no client retries past it, short enough that the dedupe set is
 // bounded by a day of traffic rather than by the conversation's whole history.
@@ -44,11 +48,20 @@ export class SendMessageUseCase {
     private readonly unitOfWork: UnitOfWork,
     private readonly cache: CacheStore,
     private readonly clock: Clock,
+    // Absent in a spec about text alone; a send naming a file then fails (`26.1`).
+    private readonly files: {
+      readonly attachments: MessageAttachmentRepository;
+      readonly storage: StorageGateway;
+    } | null = null,
   ) {}
 
   public async execute(actor: Principal, input: SendMessageInput): Promise<MessageRecord> {
     this.authorizer.assert(actor, "messaging.message.send");
     const conversation = await this.access.assertParticipant(actor, input.conversationId);
+
+    // Before the claim, so a file that never arrived fails the send cleanly and a retry
+    // after uploading it again is not mistaken for a duplicate.
+    const sizes = await this.sizesOf(actor, input);
 
     // Generated here, not in the repository: the dedupe key holds them, which is what
     // lets a retry be handed the row the first attempt wrote.
@@ -88,7 +101,7 @@ export class SendMessageUseCase {
     }
 
     const message = await this.unitOfWork.run(() =>
-      this.write(actor, input, conversation.kind, id, createdAt),
+      this.write(actor, input, conversation.kind, id, createdAt, sizes),
     );
 
     // The **fast path**, after the commit and best effort. The subscriber publishes the
@@ -130,6 +143,7 @@ export class SendMessageUseCase {
     conversationKind: ConversationKind,
     id: MessageId,
     createdAt: Date,
+    sizes: readonly number[],
   ): Promise<MessageRecord> {
     const message = await this.messages.save({
       id,
@@ -148,6 +162,25 @@ export class SendMessageUseCase {
       message.createdAt,
     );
 
+    const attachments = input.attachments.map((file, index) => ({
+      id: file.id,
+      name: file.name,
+      contentType: file.contentType,
+      size: sizes[index] ?? 0,
+    }));
+    if (attachments.length > 0 && this.files) {
+      await this.files.attachments.saveMany(
+        attachments.map((file) => ({
+          ...file,
+          organizationId: actor.organizationId,
+          conversationId: input.conversationId,
+          messageId: message.id,
+          uploaderId: actor.userId,
+          createdAt: message.createdAt,
+        })),
+      );
+    }
+
     await this.events.publish(actor, {
       name: "message.sent",
       payload: {
@@ -159,7 +192,32 @@ export class SendMessageUseCase {
       },
     });
 
-    return message;
+    // Only when there are some, so a retry's answer (which reads no files) matches.
+    return attachments.length > 0 ? { ...message, attachments } : message;
+  }
+
+  // Each named upload's stored size, read from storage: a file that is not there is a
+  // client that skipped the upload or let its signature expire, and the send is refused.
+  private async sizesOf(actor: Principal, input: SendMessageInput): Promise<readonly number[]> {
+    if (input.attachments.length === 0) return [];
+    if (!this.files) throw new ValidationError([{ field: "attachments", rule: "unsupported" }]);
+    const files = this.files;
+    const sizes = await Promise.all(
+      input.attachments.map((file) =>
+        files.storage.sizeOf(
+          MessageAttachmentKey.key(
+            actor.organizationId,
+            input.conversationId,
+            actor.userId,
+            file.id,
+          ),
+        ),
+      ),
+    );
+    if (sizes.some((size) => size === null)) {
+      throw new ValidationError([{ field: "attachments", rule: "missing" }]);
+    }
+    return sizes as number[];
   }
 
   // The `<@id>` tokens the composer inserts (`26.7`), once each, never the author, at most

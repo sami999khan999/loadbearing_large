@@ -2,6 +2,7 @@ import { IndexTextStage } from "../ai/index.js";
 import type { AssistantUsageProjector } from "../assistant/index.js";
 import { DocImageKey, type DocImageSweep } from "../doc/index.js";
 import { CapabilitySet, type OrganizationId, type UserId } from "../import.js";
+import { MessageAttachmentKey } from "../messaging/index.js";
 import type {
   ActivityLogger,
   AnalyticsProjector,
@@ -78,6 +79,8 @@ export class PurgeOrganizationUseCase {
     // The same prefix walk for index text a job has not consumed yet, which nothing else
     // would delete until the nightly sweep a week later.
     await this.images?.sweep(IndexTextStage.tenantPrefix(input.organizationId));
+    // And message attachments (`26.1`), whose prefix is their only index too.
+    await this.images?.sweep(MessageAttachmentKey.tenantPrefix(input.organizationId));
 
     // `system`, and with no capabilities: this actor authorizes nothing, it only names
     // who asked. The permission was asserted when the job was queued.

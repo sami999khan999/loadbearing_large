@@ -2,6 +2,7 @@ import type { ListMessagesInput } from "../import.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationAccess } from "./conversation-access.js";
 import type { MessagePageResult, MessageRepository } from "./message.repository.js";
+import type { MessageAttachmentRepository } from "./message-attachment.repository.js";
 import type { MessageReactionRepository } from "./message-reaction.repository.js";
 
 export class ListMessagesUseCase {
@@ -11,6 +12,7 @@ export class ListMessagesUseCase {
     private readonly messages: MessageRepository,
     // Absent in a spec about paging alone; the page then carries no reactions.
     private readonly reactions: MessageReactionRepository | null = null,
+    private readonly attachments: MessageAttachmentRepository | null = null,
   ) {}
 
   public async execute(actor: Principal, input: ListMessagesInput): Promise<MessagePageResult> {
@@ -30,21 +32,30 @@ export class ListMessagesUseCase {
       before: input.before,
       upTo: conversation.lastMessageAt,
     });
-    if (!this.reactions || page.items.length === 0) return page;
+    if (page.items.length === 0) return page;
 
     // One query for the page, inside the months it already read (`26.1`).
     const times = page.items.map((item) => item.createdAt.getTime());
-    const summaries = await this.reactions.summaries(
-      actor.organizationId,
-      input.conversationId,
-      page.items.map((item) => item.id),
-      new Date(Math.min(...times)),
-      new Date(Math.max(...times)),
-      actor.userId,
-    );
+    const [from, to] = [new Date(Math.min(...times)), new Date(Math.max(...times))];
+    const ids = page.items.map((item) => item.id);
+    const [summaries, files] = await Promise.all([
+      this.reactions?.summaries(
+        actor.organizationId,
+        input.conversationId,
+        ids,
+        from,
+        to,
+        actor.userId,
+      ),
+      this.attachments?.forMessages(actor.organizationId, input.conversationId, ids, from, to),
+    ]);
     return {
       ...page,
-      items: page.items.map((item) => ({ ...item, reactions: summaries.get(item.id) ?? [] })),
+      items: page.items.map((item) => ({
+        ...item,
+        reactions: summaries?.get(item.id) ?? [],
+        attachments: files?.get(item.id) ?? [],
+      })),
     };
   }
 }

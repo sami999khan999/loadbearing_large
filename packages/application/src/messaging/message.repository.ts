@@ -1,4 +1,11 @@
-import type { ConversationId, MessageEmoji, MessageId, OrganizationId, UserId } from "../import.js";
+import type {
+  ConversationId,
+  MessageAttachmentDto,
+  MessageEmoji,
+  MessageId,
+  OrganizationId,
+  UserId,
+} from "../import.js";
 
 export interface MessageRecord {
   readonly id: MessageId;
@@ -11,6 +18,8 @@ export interface MessageRecord {
   readonly createdAt: Date;
   // Attached by the list (`26.1`); a message just sent or edited carries none.
   readonly reactions?: readonly ReactionSummary[];
+  // Attached by the list and by a send (`26.1`); none on an edit's answer.
+  readonly attachments?: readonly MessageAttachmentDto[];
 }
 
 export interface ReactionSummary {

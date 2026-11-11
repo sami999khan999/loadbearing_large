@@ -1,5 +1,6 @@
 import type { MessageId } from "@loadbearing/contracts";
 import { FixedClock } from "@loadbearing/core";
+import { ValidationError } from "@loadbearing/errors";
 import { describe, expect, it } from "vitest";
 import type { ConversationRepository } from "../../src/messaging/conversation.repository.js";
 import { ConversationAccess } from "../../src/messaging/conversation-access.js";
@@ -121,7 +122,12 @@ const build = (
   };
 };
 
-const input = { conversationId: CONVERSATION, body: "hello", clientId: message().clientId };
+const input = {
+  conversationId: CONVERSATION,
+  body: "hello",
+  clientId: message().clientId,
+  attachments: [],
+};
 
 const dedupeKey = `message:client:${ORG}:${CONVERSATION}:${input.clientId}`;
 
@@ -271,5 +277,71 @@ describe("SendMessageUseCase, the send dedupe", () => {
     expect(harness.cache.entries.get(dedupeKey)).toMatchObject({
       id: "018f8c00-0000-7000-8000-0000000000de",
     });
+  });
+});
+
+// `26.1`: a send names files already uploaded under the sender's own prefix in the room.
+describe("SendMessageUseCase, with attachments", () => {
+  const withFiles = (present: ReadonlySet<string>) => {
+    const conversations = new Conversations();
+    const messages = new Messages();
+    const saved: unknown[] = [];
+    const asked: string[] = [];
+    const repo = conversations as unknown as ConversationRepository;
+    const useCase = new SendMessageUseCase(
+      authorizer,
+      new ConversationAccess(repo),
+      repo,
+      messages as unknown as MessageRepository,
+      new RecordingEvents() as unknown as DomainEventPublisher,
+      new RecordingRealtime() as unknown as RealtimePublisher,
+      new CountingUnitOfWork() as unknown as UnitOfWork,
+      new Cache() as unknown as CacheStore,
+      new FixedClock(NOW),
+      {
+        attachments: {
+          saveMany: (rows: readonly unknown[]) => {
+            saved.push(...rows);
+            return Promise.resolve();
+          },
+        } as never,
+        storage: {
+          sizeOf: (key: string) => {
+            asked.push(key);
+            return Promise.resolve(present.has(key.split("/").pop() ?? "") ? 2048 : null);
+          },
+        } as never,
+      },
+    );
+    return { useCase, saved, asked, messages };
+  };
+
+  const FILE = "018f8c00-0000-7000-8000-0000000000f1";
+  const attached = {
+    ...input,
+    body: "",
+    attachments: [{ id: FILE, name: "plan.pdf", contentType: "application/pdf" as const }],
+  };
+
+  it("reads each file's size from the sender's own prefix and saves it with the message", async () => {
+    const { useCase, saved, asked, messages } = withFiles(new Set([FILE]));
+
+    const sent = await useCase.execute(principal(), attached);
+
+    expect(asked).toEqual([`msg/${ORG}/${CONVERSATION}/${principal().userId}/${FILE}`]);
+    expect(saved).toEqual([
+      expect.objectContaining({ id: FILE, size: 2048, messageId: messages.saved[0]?.id }),
+    ]);
+    expect(sent.attachments).toEqual([
+      { id: FILE, name: "plan.pdf", contentType: "application/pdf", size: 2048 },
+    ]);
+  });
+
+  it("refuses a file that never arrived, before writing anything", async () => {
+    const { useCase, saved, messages } = withFiles(new Set());
+
+    await expect(useCase.execute(principal(), attached)).rejects.toBeInstanceOf(ValidationError);
+    expect(saved).toEqual([]);
+    expect(messages.saved).toEqual([]);
   });
 });
