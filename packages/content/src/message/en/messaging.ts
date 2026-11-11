@@ -40,4 +40,9 @@ export const messaging = {
   // Reactions (`26.1`): a label and a count, because `Translator` does not pluralise.
   "messaging.reaction.add": "React",
   "messaging.reaction.toggle": "{emoji} reactions: {count}",
+  // Files on a message (`26.1`).
+  "messaging.attachment.add": "Attach a file",
+  "messaging.attachment.remove": "Remove {name}",
+  "messaging.attachment.open": "Open {name}",
+  "messaging.attachment.failed": "That file could not be uploaded.",
 } as const;

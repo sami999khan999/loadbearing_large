@@ -35,4 +35,8 @@ export const messaging = {
   "messaging.compose.mention": "উল্লেখ করুন…",
   "messaging.reaction.add": "প্রতিক্রিয়া দিন",
   "messaging.reaction.toggle": "{emoji} প্রতিক্রিয়া: {count}",
+  "messaging.attachment.add": "ফাইল যুক্ত করুন",
+  "messaging.attachment.remove": "{name} সরান",
+  "messaging.attachment.open": "{name} খুলুন",
+  "messaging.attachment.failed": "ফাইলটি আপলোড করা যায়নি।",
 } as const;
