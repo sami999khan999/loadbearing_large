@@ -125,12 +125,12 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 
 ### Messaging
 
-- [ ] `26.1` **Threads and attachments** — what is left of it. **Reactions built 2026-11-11:**
-  `message_reactions`, partitioned with each row in its message's month, six emoji, toggled by
-  `message.react` and summarised per page in one query with the reader's own marked. **Left:**
-  threads — `messages` is partitioned, so a reply's `parent_id` cannot reference `id` alone,
-  and thread reads should take the first page's `upTo` bound (`CP2.2`) — and attachments,
-  where `StorageGateway.presignPost` already signs a bounded upload (`DC.4`).
+- [ ] `26.1` **Threads** — what is left of it. **Reactions and attachments built 2026-11-11/12:**
+  reactions in `message_reactions`; attachments as a signed direct upload under
+  `msg/<tenant>/<room>/<uploader>/`, checked for arrival at send, rows in
+  `message_attachments`, opened through a five-minute signed link for members only, and swept on
+  tenant delete. **Left:** threads — `messages` is partitioned, so a reply's `parent_id` cannot
+  reference `id` alone, and thread reads should take the first page's `upTo` bound (`CP2.2`).
   — `archive/COMMUNICATION.md:25`
 - [ ] `26.4` **Old `messages` partitions archived to S3.** Parked pending a discussion: it reopens
   decision D47. The reads that grew with it are bounded now (`CP2.2`, `CP2.3`), which weakens the
