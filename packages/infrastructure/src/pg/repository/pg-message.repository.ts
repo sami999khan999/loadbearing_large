@@ -1,8 +1,10 @@
 import {
   and,
+  asc,
   type ConversationId,
   desc,
   eq,
+  gte,
   inArray,
   isNull,
   lte,
@@ -16,6 +18,7 @@ import {
   type OrganizationId,
   type Placement,
   sql,
+  type ThreadPageResult,
   type UnreadCount,
   type UserId,
 } from "../../import.js";
@@ -38,6 +41,7 @@ interface MessageRow {
   readonly deletedAt: Date | null;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
+  readonly parentId: MessageId | null;
 }
 
 export class PgMessageRepository extends BaseRepository implements MessageRepository {
@@ -59,6 +63,8 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
         and(
           eq(messages.organizationId, organizationId),
           eq(messages.conversationId, query.conversationId),
+          // The room's own messages: a reply is read in its thread (`26.1`).
+          isNull(messages.parentId),
           before
             ? sql`(${messages.createdAt}, ${messages.id}) < (${before.at}, ${before.id}::uuid)`
             : undefined,
@@ -79,6 +85,67 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
       olderCursor:
         rows.length > query.limit && last ? KeysetCursor.encode(last.createdAt, last.id) : null,
     };
+  }
+
+  // Forwards on `(created_at, id)` from the root's time, on the partial thread index.
+  public async listReplies(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    parentId: MessageId,
+    parentCreatedAt: Date,
+    limit: number,
+    after: string | null,
+  ): Promise<ThreadPageResult> {
+    const from = after ? KeysetCursor.decode(after) : null;
+    const rows = await this.db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.organizationId, organizationId),
+          eq(messages.conversationId, conversationId),
+          eq(messages.parentId, parentId),
+          gte(messages.createdAt, from?.at ?? parentCreatedAt),
+          from
+            ? sql`(${messages.createdAt}, ${messages.id}) > (${from.at}, ${from.id}::uuid)`
+            : undefined,
+        ),
+      )
+      .orderBy(asc(messages.createdAt), asc(messages.id))
+      .limit(limit + 1);
+
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: page.map((row) => PgMessageRepository.toRecord(row)),
+      newerCursor:
+        rows.length > limit && last ? KeysetCursor.encode(last.createdAt, last.id) : null,
+    };
+  }
+
+  public async replyCounts(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    parentIds: readonly MessageId[],
+    from: Date,
+  ): Promise<ReadonlyMap<MessageId, number>> {
+    if (parentIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ parentId: messages.parentId, count: sql<string>`count(*)` })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.organizationId, organizationId),
+          eq(messages.conversationId, conversationId),
+          inArray(messages.parentId, [...parentIds]),
+          gte(messages.createdAt, from),
+          isNull(messages.deletedAt),
+        ),
+      )
+      .groupBy(messages.parentId);
+    return new Map(
+      rows.flatMap((row) => (row.parentId ? [[row.parentId, Number(row.count)] as const] : [])),
+    );
   }
 
   public async findById(
@@ -118,6 +185,8 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
         clientId: message.clientId,
         body: message.body,
         createdAt: message.createdAt,
+        parentId: message.parentId ?? null,
+        parentCreatedAt: message.parentCreatedAt ?? null,
       })
       .returning();
 
@@ -222,6 +291,7 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
       deleted: row.deletedAt !== null,
       editedAt: row.editedAt,
       createdAt: row.createdAt,
+      parentId: row.parentId,
     };
   }
 }

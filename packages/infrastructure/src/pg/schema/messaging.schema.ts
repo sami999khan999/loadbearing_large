@@ -109,6 +109,10 @@ export const messages = pgTable(
     // Soft: the row keeps its place so the conversation keeps its shape and the keyset
     // cursor over it stays stable. The body is blanked, not the row.
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // The root a reply answers (`26.1`), with the root's time as the partition hint: a
+    // partitioned table has no key on `id` alone, so the pair is the reference.
+    parentId: uuid("parent_id").$type<MessageId>(),
+    parentCreatedAt: timestamp("parent_created_at", { withTimezone: true, precision: 3 }),
     // Milliseconds, not the default microseconds: every caller hands this value back as a
     // predicate. See application/docs/reference/messaging.md.
     createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
@@ -124,6 +128,10 @@ export const messages = pgTable(
       t.id.desc(),
     ),
     index("messages_conversation_fk_idx").on(t.conversationId),
+    // A thread, oldest first, and each root's reply count: replies only, so it stays small.
+    index("messages_thread_idx")
+      .on(t.organizationId, t.conversationId, t.parentId, t.createdAt, t.id)
+      .where(sql`${t.parentId} is not null`),
   ],
 );
 

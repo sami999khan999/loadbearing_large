@@ -262,6 +262,7 @@ export {
   type TenantStoragePage,
   type TenantStorageReader,
   type TenantStorageRow,
+  type ThreadPageResult,
   UnitOfWork,
   type UnreadCount,
   type UnreadQuery,
