@@ -2023,10 +2023,21 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   counted per root in one query. **Proof:** specs at every layer; against `pnpm dev`, carol's
   reply to bob's root showed as one reply on the root, read in its thread, and stayed off the room.
 
+- [x] `26.3` **Web push** `done: 2026-11-12` — whole: a `PushSender` port and a `web-push`
+  adapter, VAPID keys from `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` (all or none),
+  `push_subscriptions` partitioned by tenant, a service worker at `/push-worker`, and `push` as
+  a third channel in the grid at `immediate` or `off`, on by default for messages and off for
+  membership. The words are the kind's copy in the recipient's locale, never a message body; a
+  device the service retires (404/410) is deleted, and an event pushes once per device.
+  **Proof:** specs at every layer; against `pnpm dev`, carol subscribed, a digest push was
+  refused, a fresh mention claimed her device's push and the worker logged no error, and
+  unsubscribing removed the row. Not checked: a real browser receiving one.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **`26.3` closed:** web push, a third channel |
 | 2026-11-12 | @sami | **`26.1` closed:** threads, the last of it |
 | 2026-11-11 | @sami | **`26.7` closed:** channel mentions, the last of it |
 | 2026-11-11 | @sami | **`26.6` closed:** stream leases hold the cap across processes, and give presence |
