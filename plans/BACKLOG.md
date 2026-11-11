@@ -30,7 +30,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 1 | 48 |
-| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 4 | 5 |
+| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 3 | 6 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 1 | 8 |
@@ -125,13 +125,6 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 
 ### Messaging
 
-- [ ] `26.1` **Threads** — what is left of it. **Reactions and attachments built 2026-11-11/12:**
-  reactions in `message_reactions`; attachments as a signed direct upload under
-  `msg/<tenant>/<room>/<uploader>/`, checked for arrival at send, rows in
-  `message_attachments`, opened through a five-minute signed link for members only, and swept on
-  tenant delete. **Left:** threads — `messages` is partitioned, so a reply's `parent_id` cannot
-  reference `id` alone, and thread reads should take the first page's `upTo` bound (`CP2.2`).
-  — `archive/COMMUNICATION.md:25`
 - [ ] `26.4` **Old `messages` partitions archived to S3.** Parked pending a discussion: it reopens
   decision D47. The reads that grew with it are bounded now (`CP2.2`, `CP2.3`), which weakens the
   case. — `archive/COMMUNICATION.md:29`

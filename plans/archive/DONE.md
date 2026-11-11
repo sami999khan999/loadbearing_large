@@ -2015,10 +2015,19 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   specs at every layer; against `pnpm dev`, a plain channel message notified nobody and a
   mention of carol reached her inbox.
 
+- [x] `26.1` **Threads, reactions and attachments** `done: 2026-11-12` — reactions in
+  `message_reactions`, six emoji, summarised per page in one query; attachments as a signed
+  direct upload under `msg/<tenant>/<room>/<uploader>/`, checked at send, opened through a
+  five-minute link and swept on tenant delete; threads one level deep, a reply carrying its
+  root's `parent_id` and `parent_created_at`, kept off the room's page by a partial index and
+  counted per root in one query. **Proof:** specs at every layer; against `pnpm dev`, carol's
+  reply to bob's root showed as one reply on the root, read in its thread, and stayed off the room.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **`26.1` closed:** threads, the last of it |
 | 2026-11-11 | @sami | **`26.7` closed:** channel mentions, the last of it |
 | 2026-11-11 | @sami | **`26.6` closed:** stream leases hold the cap across processes, and give presence |
 | 2026-11-11 | @sami | **`26.11` closed:** per-tenant SMTP with a platform default, passwords encrypted |
