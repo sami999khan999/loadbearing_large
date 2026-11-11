@@ -96,6 +96,7 @@ import {
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
+  GetPushKeyUseCase,
   GetWidgetPreferencesUseCase,
   GetWorkerFleetUseCase,
   GrantPermissionOverrideUseCase,
@@ -207,6 +208,7 @@ import {
   PgPlatformPolicyRepository,
   PgPlatformReader,
   PgProjectionPolicyRepository,
+  PgPushSubscriptionRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgShardAssignmentRepository,
@@ -306,6 +308,7 @@ import {
   type StorageGateway,
   type StoragePolicyGateway,
   StreamAssistantAnswerUseCase,
+  SubscribePushUseCase,
   SubscriberRegistry,
   SuspendAccountUseCase,
   SwitchModuleUseCase,
@@ -318,6 +321,7 @@ import {
   TransactionScope,
   UnifiedMarkdownRenderer,
   type UnitOfWork,
+  UnsubscribePushUseCase,
   UpdateDefaultPlanUseCase,
   UpdateDigestHourUseCase,
   UpdateDocSpaceUseCase,
@@ -334,6 +338,7 @@ import {
   type UserId,
   type VectorStore,
   WatchConversationUseCase,
+  WebPushSender,
   type WorkerFleetGateway,
   type WorkerQueueSettingsRepository,
 } from "../import.js";
@@ -343,6 +348,7 @@ import {
   QueuedInvitationMailer,
   QueuedMailPublisher,
 } from "../mail/index.js";
+import { ContentPushRenderer } from "../push/index.js";
 import { OrganizationShardingStrategy } from "../shard/index.js";
 import type { ContainerConfig } from "./container.config.js";
 import { ContainerHealthReader } from "./container-health.reader.js";
@@ -599,6 +605,9 @@ export class Container {
     readonly sendDigest: SendNotificationDigestUseCase;
     readonly digestHour: GetDigestHourUseCase;
     readonly updateDigestHour: UpdateDigestHourUseCase;
+    readonly pushKey: GetPushKeyUseCase;
+    readonly pushSubscribe: SubscribePushUseCase;
+    readonly pushUnsubscribe: UnsubscribePushUseCase;
   };
   // `generate` is null without a model: the worker registers no `assistant` lane then, and
   // `send` answers NOT_FOUND. The rest read what an earlier deploy with a model wrote.
@@ -1100,6 +1109,18 @@ export class Container {
       this.transactions,
       this.shards,
     );
+    const pushSubscriptions = new PgPushSubscriptionRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const pushRenderer = new ContentPushRenderer(this.content, config.email.baseUrl);
+    const push = config.push
+      ? {
+          subscriptions: pushSubscriptions,
+          sender: new WebPushSender(config.push, (payload) => pushRenderer.render(payload)),
+        }
+      : null;
     this.notification = {
       list: new ListNotificationsUseCase(this.authorizer, notifications),
       archived: new ListArchivedNotificationsUseCase(
@@ -1136,6 +1157,7 @@ export class Container {
         this.realtime,
         this.cache,
         this.routedUnitOfWork,
+        push,
       ),
       sendDigest: new SendNotificationDigestUseCase(
         notifications,
@@ -1151,6 +1173,18 @@ export class Container {
         this.activity,
         this.catalogUnitOfWork,
         this.clock,
+      ),
+      pushKey: new GetPushKeyUseCase(this.authorizer, config.push?.publicKey ?? null),
+      pushSubscribe: new SubscribePushUseCase(
+        this.authorizer,
+        pushSubscriptions,
+        this.routedUnitOfWork,
+        push !== null,
+      ),
+      pushUnsubscribe: new UnsubscribePushUseCase(
+        this.authorizer,
+        pushSubscriptions,
+        this.routedUnitOfWork,
       ),
     };
 

@@ -46,6 +46,7 @@ export {
   RecordingMaintenanceGateway,
 } from "./recording-maintenance.gateway.js";
 export { RecordingPartitionArchiveGateway } from "./recording-partition-archive.gateway.js";
+export { RecordingPushSender } from "./recording-push.sender.js";
 export { type PublishedJob, RecordingQueuePublisher } from "./recording-queue.publisher.js";
 export {
   type PublishedFrame,

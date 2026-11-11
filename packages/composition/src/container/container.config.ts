@@ -88,6 +88,13 @@ export interface ContainerConfig {
     // dashboard, and a saved one is not used (`26.11`).
     readonly secretKey?: string;
   };
+  // VAPID keys for web push (`26.3`). Absent, the settings page offers no push and a
+  // `push` preference reaches nobody; both keys are generated once and kept.
+  readonly push?: {
+    readonly publicKey: string;
+    readonly privateKey: string;
+    readonly subject: string;
+  };
   // `none` is lexical search over the chunk text and no outbound call. The other two need
   // a key, and a model defaults per provider when unset. See docs/reference/container.md.
   readonly embedding: {

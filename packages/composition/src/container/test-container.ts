@@ -26,6 +26,7 @@ import {
   RecordingMailPublisher,
   RecordingMaintenanceGateway,
   RecordingPartitionArchiveGateway,
+  RecordingPushSender,
   RecordingQueuePublisher,
   RecordingRealtimePublisher,
   RecordingRelayedActivityStore,
@@ -64,6 +65,7 @@ import {
   type PartitionArchiveGateway,
   type PresenceReader,
   type Principal,
+  type PushSender,
   type QueuePublisher,
   type RateLimitStore,
   type RealtimePublisher,
@@ -111,6 +113,7 @@ export interface TestPorts {
   readonly mailRenderer: MailRenderer;
   readonly emailSenders: EmailSenderResolver;
   readonly secretCipher: SecretCipher;
+  readonly pushSender: PushSender;
   readonly presence: PresenceReader;
   readonly markdownRenderer: MarkdownRenderer;
   readonly maintenance: MaintenanceGateway;
@@ -185,6 +188,7 @@ export class TestContainer {
       mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
       emailSenders: overrides.emailSenders ?? new StubEmailSenderResolver(),
       secretCipher: overrides.secretCipher ?? new StubSecretCipher(),
+      pushSender: overrides.pushSender ?? new RecordingPushSender(),
       presence: overrides.presence ?? new InMemoryPresenceReader(),
       markdownRenderer: overrides.markdownRenderer ?? new StubMarkdownRenderer(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
