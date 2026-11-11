@@ -15,6 +15,7 @@ export const messagingProcedurePermissions = {
   "conversation.leave": "messaging.conversation.read",
   "conversation.markRead": "messaging.conversation.read",
   "message.list": "messaging.conversation.read",
+  "message.thread": "messaging.conversation.read",
   "message.send": "messaging.message.send",
   // Reacting is saying something in the room, so it is gated as a message is.
   "message.react": "messaging.message.send",

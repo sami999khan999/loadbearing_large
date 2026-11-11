@@ -59,6 +59,20 @@ export class MessageContract {
       .default([]),
     // Files the message carries, oldest first. Each opens through `message.attachmentUrl`.
     attachments: z.array(attachment).readonly().default([]),
+    // The message this one replies to, or null for one in the room itself (`26.1`).
+    parentId: Identifiers.messageId.nullable().default(null),
+    // How many replies a top-level message has. Zero on a reply, which has none.
+    replyCount: z.number().int().nonnegative().default(0),
+  });
+
+  // A thread, oldest first from its root, as a conversation reads forwards from there.
+  public static readonly threadQuery = z.object({
+    conversationId: Identifiers.conversationId,
+    messageId: Identifiers.messageId,
+    // The root's time: replies are never older, so the read starts in its month.
+    createdAt: z.coerce.date(),
+    limit: z.number().int().positive().max(PAGE_MAX).default(30),
+    after: z.string().max(256).optional(),
   });
 
   public static readonly emoji = emoji;
@@ -92,6 +106,12 @@ export class MessageContract {
     olderCursor: z.string().nullable(),
   });
 
+  public static readonly threadPage = z.object({
+    items: z.array(MessageContract.entity).readonly(),
+    // Null is the end of the thread so far.
+    newerCursor: z.string().nullable(),
+  });
+
   public static readonly send = z
     .object({
       conversationId: Identifiers.conversationId,
@@ -104,6 +124,8 @@ export class MessageContract {
         .array(attachment.omit({ size: true }))
         .max(ATTACHMENTS_MAX)
         .default([]),
+      // A reply (`26.1`): the root it answers, with its time as the partition hint.
+      parent: z.object({ messageId: Identifiers.messageId, createdAt: z.coerce.date() }).optional(),
     })
     // Text, a file, or both, but never neither.
     .refine((send) => send.body.trim().length > 0 || send.attachments.length > 0, {
@@ -169,3 +191,5 @@ export type MessageAttachmentType = z.infer<typeof MessageContract.attachmentTyp
 export type RequestAttachmentUploadInput = z.infer<typeof MessageContract.attachmentUpload>;
 export type AttachmentUploadDto = z.infer<typeof MessageContract.attachmentUploaded>;
 export type AttachmentLinkInput = z.infer<typeof MessageContract.attachmentLink>;
+export type ListThreadInput = z.infer<typeof MessageContract.threadQuery>;
+export type MessageThreadPage = z.infer<typeof MessageContract.threadPage>;

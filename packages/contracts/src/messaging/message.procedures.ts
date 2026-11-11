@@ -37,6 +37,11 @@ export class MessageProcedures {
     .input(MessageContract.react)
     .output(Envelope.acknowledged);
 
+  public static readonly thread = oc
+    .route({ method: "GET", path: "/messages/{messageId}/thread" })
+    .input(MessageContract.threadQuery)
+    .output(MessageContract.threadPage);
+
   public static readonly attachmentUpload = oc
     .route({ method: "POST", path: "/messages/attachments" })
     .input(MessageContract.attachmentUpload)
@@ -51,6 +56,7 @@ export class MessageProcedures {
     list: MessageProcedures.list,
     send: MessageProcedures.send,
     react: MessageProcedures.react,
+    thread: MessageProcedures.thread,
     attachmentUpload: MessageProcedures.attachmentUpload,
     attachmentUrl: MessageProcedures.attachmentUrl,
     edit: MessageProcedures.edit,
