@@ -24,6 +24,7 @@ export { PgMaintenanceGateway } from "./pg-maintenance.gateway.js";
 export { PgMemberRepository } from "./pg-member.repository.js";
 export { PgMembershipReader } from "./pg-membership.reader.js";
 export { PgMessageRepository } from "./pg-message.repository.js";
+export { PgMessageAttachmentRepository } from "./pg-message-attachment.repository.js";
 export { PgMessageReactionRepository } from "./pg-message-reaction.repository.js";
 export { PgNotificationRepository } from "./pg-notification.repository.js";
 export { PgNotificationPreferenceRepository } from "./pg-notification-preference.repository.js";

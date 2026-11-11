@@ -34,6 +34,7 @@ export {
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgMessageAttachmentRepository,
   PgMessageReactionRepository,
   PgMessageRepository,
   PgNotificationPreferenceRepository,

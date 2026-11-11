@@ -1,6 +1,7 @@
 import {
   type ConversationId,
   index,
+  integer,
   type MessageId,
   type OrganizationId,
   pgTable,
@@ -157,5 +158,32 @@ export const messageReactions = pgTable(
       t.messageId,
     ),
     index("message_reactions_user_fk_idx").on(t.organizationId, t.userId),
+  ],
+);
+
+// A message's files (`26.1`): the row names the upload, and storage holds the bytes under
+// `msg/<tenant>/<room>/<uploader>/<id>`. `created_at` is the message's time, as for reactions.
+export const messageAttachments = pgTable(
+  "message_attachments",
+  {
+    id: uuid("id").notNull(),
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
+    messageId: uuid("message_id").$type<MessageId>().notNull(),
+    uploaderId: uuid("uploader_id").$type<UserId>().notNull(),
+    name: text("name").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.id, t.organizationId, t.createdAt] }),
+    index("message_attachments_page_idx").on(
+      t.organizationId,
+      t.conversationId,
+      t.createdAt,
+      t.messageId,
+    ),
+    index("message_attachments_uploader_fk_idx").on(t.organizationId, t.uploaderId),
   ],
 );
