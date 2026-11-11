@@ -3,6 +3,7 @@ import {
   type ClientNamespace,
   DigestHourForm,
   NotificationPreferenceForm,
+  PushDeviceForm,
   useCapabilities,
   useMessages,
 } from "~/import.js";
@@ -27,6 +28,7 @@ function NotificationSettings() {
     <main>
       <h1>{t("notification.preference.title")}</h1>
       <NotificationPreferenceForm />
+      <PushDeviceForm />
       <DigestHourForm canManage={capabilities.can("notification.digest.manage")} />
     </main>
   );

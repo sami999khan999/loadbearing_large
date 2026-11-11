@@ -87,6 +87,14 @@ const Schema = z
     // 32 bytes, base64, for SMTP passwords saved from the platform Mail page (`26.11`).
     // Never derived from AUTH_SECRET: rotating that must not break every tenant's mail.
     MAIL_SECRET_KEY: z.string().min(1).optional(),
+    // Web push (`26.3`): all three or none. `npx web-push generate-vapid-keys` makes the
+    // pair once; changing it orphans every browser already subscribed.
+    VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+    VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+    VAPID_SUBJECT: z
+      .string()
+      .regex(/^(mailto:|https:)/)
+      .optional(),
     // The origin a link in a message points at. Separate from `AUTH_URL`, which is Better
     // Auth's own: the worker sends invitation mail and parses no auth configuration.
     APP_BASE_URL: z.url(),
@@ -366,6 +374,15 @@ export class Env {
         baseUrl: e.APP_BASE_URL,
         ...(e.MAIL_SECRET_KEY ? { secretKey: e.MAIL_SECRET_KEY } : {}),
       },
+      ...(e.VAPID_PUBLIC_KEY && e.VAPID_PRIVATE_KEY && e.VAPID_SUBJECT
+        ? {
+            push: {
+              publicKey: e.VAPID_PUBLIC_KEY,
+              privateKey: e.VAPID_PRIVATE_KEY,
+              subject: e.VAPID_SUBJECT,
+            },
+          }
+        : {}),
       embedding: {
         provider: e.EMBEDDING_PROVIDER,
         dimensions: e.EMBEDDING_DIMENSIONS,

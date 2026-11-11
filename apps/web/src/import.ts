@@ -107,6 +107,7 @@ export {
   ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
+  PushDeviceForm,
   prefetchDashboard,
   ReplicaSwitchPanel,
   ResetPasswordForm,

@@ -60,6 +60,24 @@ export class NotificationRouter {
     },
   );
 
+  public static readonly pushKey = authed.notification.pushKey.handler(({ context }) =>
+    context.container.notification.pushKey.execute(context.principal),
+  );
+
+  public static readonly pushSubscribe = authed.notification.pushSubscribe.handler(
+    async ({ input, context }) => {
+      await context.container.notification.pushSubscribe.execute(context.principal, input);
+      return { ok: true as const };
+    },
+  );
+
+  public static readonly pushUnsubscribe = authed.notification.pushUnsubscribe.handler(
+    async ({ input, context }) => {
+      await context.container.notification.pushUnsubscribe.execute(context.principal, input);
+      return { ok: true as const };
+    },
+  );
+
   // The object the merge point in `app.router.ts` mounts, mirroring
   // `NotificationProcedures.all`.
   public static readonly all = {
@@ -73,5 +91,8 @@ export class NotificationRouter {
     updatePreference: NotificationRouter.updatePreference,
     digestHour: NotificationRouter.digestHour,
     updateDigestHour: NotificationRouter.updateDigestHour,
+    pushKey: NotificationRouter.pushKey,
+    pushSubscribe: NotificationRouter.pushSubscribe,
+    pushUnsubscribe: NotificationRouter.pushUnsubscribe,
   } as const;
 }
