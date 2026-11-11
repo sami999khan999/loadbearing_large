@@ -17,6 +17,10 @@ export class MessageRouter {
       context.container.messaging.openAttachment.execute(context.principal, input),
   );
 
+  public static readonly thread = authed.message.thread.handler(({ input, context }) =>
+    context.container.messaging.listThread.execute(context.principal, input),
+  );
+
   public static readonly react = authed.message.react.handler(async ({ input, context }) => {
     await context.container.messaging.react.execute(context.principal, input);
     return { ok: true as const };
@@ -42,6 +46,7 @@ export class MessageRouter {
 
   public static readonly all = {
     react: MessageRouter.react,
+    thread: MessageRouter.thread,
     attachmentUpload: MessageRouter.attachmentUpload,
     attachmentUrl: MessageRouter.attachmentUrl,
     list: MessageRouter.list,

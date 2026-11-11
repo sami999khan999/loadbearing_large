@@ -55,20 +55,18 @@ function Conversation() {
   );
 
   const nameFor = (userId: string) => entity?.nameOf(userId) ?? null;
+  const mentionable = (entity?.othersThan(user?.id ?? "") ?? []).map((member) => ({
+    userId: member.userId,
+    name: member.name,
+  }));
 
   return (
     <main>
       <h1>{entity?.displayTitle(user?.id ?? "") ?? t("messaging.inbox.title")}</h1>
       <PresenceNotice conversationId={conversationId} nameFor={nameFor} selfId={user?.id} />
-      <MessageList conversationId={conversationId} nameFor={nameFor} />
+      <MessageList conversationId={conversationId} nameFor={nameFor} mentionable={mentionable} />
       <TypingNotice typing={typing} nameFor={nameFor} />
-      <MessageComposer
-        conversationId={conversationId}
-        mentionable={(entity?.othersThan(user?.id ?? "") ?? []).map((member) => ({
-          userId: member.userId,
-          name: member.name,
-        }))}
-      />
+      <MessageComposer conversationId={conversationId} mentionable={mentionable} />
     </main>
   );
 }
