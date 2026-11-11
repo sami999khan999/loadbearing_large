@@ -39,4 +39,8 @@ export const messaging = {
   "messaging.attachment.remove": "{name} সরান",
   "messaging.attachment.open": "{name} খুলুন",
   "messaging.attachment.failed": "ফাইলটি আপলোড করা যায়নি।",
+  "messaging.thread.reply": "উত্তর দিন",
+  "messaging.thread.replies": "উত্তর: {count}",
+  "messaging.thread.title": "থ্রেড",
+  "messaging.thread.more": "আরও উত্তর দেখুন",
 } as const;

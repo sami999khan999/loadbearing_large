@@ -45,4 +45,8 @@ export const messaging = {
   "messaging.attachment.remove": "Remove {name}",
   "messaging.attachment.open": "Open {name}",
   "messaging.attachment.failed": "That file could not be uploaded.",
+  "messaging.thread.reply": "Reply",
+  "messaging.thread.replies": "Replies: {count}",
+  "messaging.thread.title": "Thread",
+  "messaging.thread.more": "Show more replies",
 } as const;
