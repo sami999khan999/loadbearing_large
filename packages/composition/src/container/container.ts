@@ -158,6 +158,7 @@ import {
   NullMembershipEnroller,
   OpenAiAssistantModel,
   OpenAiEmbeddingProvider,
+  OpenAttachmentUseCase,
   OpenDocImageUseCase,
   type OrganizationFounder,
   type OrganizationId,
@@ -188,6 +189,7 @@ import {
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgMessageAttachmentRepository,
   PgMessageReactionRepository,
   PgMessageRepository,
   PgNotificationPreferenceRepository,
@@ -261,6 +263,7 @@ import {
   RenameConversationUseCase,
   type ReplicaHealth,
   ReprojectPartitionUseCase,
+  RequestAttachmentUploadUseCase,
   ResendInvitationUseCase,
   ResetWorkerProcessUseCase,
   RestoreDocRevisionUseCase,
@@ -624,6 +627,9 @@ export class Container {
     readonly markRead: MarkConversationReadUseCase;
     readonly listMessages: ListMessagesUseCase;
     readonly react: ReactToMessageUseCase;
+    // Files on a message (`26.1`): a signed upload, then a signed link to open one.
+    readonly requestAttachmentUpload: RequestAttachmentUploadUseCase;
+    readonly openAttachment: OpenAttachmentUseCase;
     readonly send: SendMessageUseCase;
     readonly edit: EditMessageUseCase;
     readonly remove: DeleteMessageUseCase;
@@ -1162,6 +1168,11 @@ export class Container {
       new PgUserReader(this.cluster, this.transactions, this.shards),
     );
 
+    const messageAttachments = new PgMessageAttachmentRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
     const messageReactions = new PgMessageReactionRepository(
       this.cluster,
       this.transactions,
@@ -1235,6 +1246,7 @@ export class Container {
         conversationAccess,
         messages,
         messageReactions,
+        messageAttachments,
       ),
       react: new ReactToMessageUseCase(
         this.authorizer,
@@ -1252,6 +1264,18 @@ export class Container {
         this.routedUnitOfWork,
         this.cache,
         this.clock,
+        { attachments: messageAttachments, storage: this.storage },
+      ),
+      requestAttachmentUpload: new RequestAttachmentUploadUseCase(
+        this.authorizer,
+        conversationAccess,
+        this.storage,
+      ),
+      openAttachment: new OpenAttachmentUseCase(
+        this.authorizer,
+        conversationAccess,
+        messageAttachments,
+        this.storage,
       ),
       edit: new EditMessageUseCase(
         this.authorizer,
