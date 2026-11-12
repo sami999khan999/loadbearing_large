@@ -199,8 +199,8 @@ The rest of `BACKLOG.md` waits on hardware, traffic or a trigger: `AX11.2` befor
 `S.2`, `S.3`, `24.7`, `26.4`, `26.8`.
 
 **The machine was left running** (Linux, 2026-11-12): the containers with the `observability`,
-`sharded` and `analytics` profiles; `pnpm dev`'s web, worker and realtime. The test data is alice
-(platform admin), bob (owner of "Bob"), carol (member of "Bob"), one direct conversation, the
+`sharded` and `analytics` profiles. No app process: start them with `pnpm dev`. The test data is alice
+(platform admin), bob (owner of "Bob"), carol (member of "Bob"), one direct conversation and one group, the
 spaces `bench` (2,000 pages, from `doc:bench`), `walk` (Forest, one page) and `partners` (granted,
 no grants), and three assistant threads.
 
