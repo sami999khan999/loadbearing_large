@@ -17,10 +17,10 @@ machine setup, test data, how each phase was checked, and the traps that cost ti
   `UI.1`, `DC.9`, `LP.1`, `AI.2` and the benchmark `LP.3`. Before that, on 2026-11-10 to 12, the
   messaging features `26.1`, `26.3`, `26.6`, `26.7`, `26.10` and `26.11`, `RV.3` and the
   assistant's `AI.1`, `AI.3` and `AI.4`.
-- **What is open is [`BACKLOG.md`](BACKLOG.md).** The walks' findings `WK.1`–`WK.6` were fixed
-  the same day; `WK.7`, a styled app shell, is a decision. The rest waits on hardware, traffic,
-  a trigger or a decision.
-- **`check:architecture` is 32/32.** `pnpm test` runs 2,615 tests and `pnpm smoke` 55.
+- **What is open is [`BACKLOG.md`](BACKLOG.md).** The walks' findings `WK.1`–`WK.7` closed the
+  same day, the shell as a sidebar, and `26.4` was built, superseding D47. The rest waits on
+  hardware, traffic or a trigger.
+- **`check:architecture` is 32/32.** `pnpm test` runs 2,630 tests and `pnpm smoke` 55.
 - The access and visibility plan, built 2026-09-28 to 30, is archived in
   [`ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md).
 
@@ -193,10 +193,11 @@ navigate, `Runtime.evaluate` with `replMode: true` for top-level `await`, `Input
 
 ## What is next
 
-1. **`WK.7`**, once decided: whether the app shell gets a layout.
+1. **Nothing that code alone can close.** Lite took messaging back the same day; anything
+   built here in messaging or the shell now ports there as well.
 
 The rest of `BACKLOG.md` waits on hardware, traffic or a trigger: `AX11.2` before 2027-03-31,
-`S.2`, `S.3`, `24.7`, `26.4`, `26.8`.
+`S.2`, `S.3`, `24.7`, `26.8`.
 
 **The machine was left running** (Linux, 2026-11-12): the containers with the `observability`,
 `sharded` and `analytics` profiles. No app process: start them with `pnpm dev`. The test data is alice
@@ -206,5 +207,4 @@ no grants), and three assistant threads.
 
 ## Open decisions for the owner
 
-- **`WK.7`:** whether the app shell gets a layout, and if so whether it is `Sidebar`.
-- **`26.4`:** archiving old `messages` partitions reopens decision D47.
+None open. `WK.7` and `26.4` were decided on 2026-11-12 and are recorded in `archive/DONE.md`.
