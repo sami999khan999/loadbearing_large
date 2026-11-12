@@ -352,7 +352,8 @@ D46. **Sharding gets a map now and a button that waits.** (2026-09-15) The map r
     once `22.3` lands; the move procedure lands with `24.2`; the contract carries
     `moves: "unavailable" | "available"` from a container getter that `24.2` flips, so the screen
     never guesses. *(was A-17)*
-D47. **`messages` is partitioned with `retentionMonths: null`.** (2026-09-15) Messages are domain data
+D47. **Superseded 2026-11-12 by `26.4`** (see `DONE.md` §23.C): message months may be archived,
+    never dropped. Kept as written: **`messages` is partitioned with `retentionMonths: null`.** (2026-09-15) Messages are domain data
     and are never dropped; the retention screen lists the table read-only, "never dropped". *(was A-18)*
 D48. **Per-tenant retention is an override row, with the table default as the fallback.** (2026-09-16)
     Hot months are exact, because prune drops that tenant's month child. Cold months per tenant are

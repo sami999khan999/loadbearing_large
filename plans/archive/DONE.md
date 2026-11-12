@@ -2117,12 +2117,28 @@ found and did not fix is `BACKLOG.md` §23.
   button, and a link closes the drawer. `app-layout.spec.tsx`. `48e1e311..54b269f8`.
 
 
+### 23.C Decided with the owner, built 2026-11-12
+
+- [x] `26.4` **Old message months archived to cold storage** — **supersedes D47.** The owner
+  reopened it: a platform admin may set `messages`' hot months, and the nightly pass archives
+  older months with their reactions and files (`PartitionedTable.MESSAGE_GROUP`), always
+  archived, never dropped and never expired in cold. A restore is a platform admin's alone; it
+  brings the group back, attaches the month wherever it falls and holds it for thirty days
+  (`partition_archive.held_until`, migration `0068`). The oldest page of a conversation names
+  the newest cold month (`archivedThrough`); a thread whose root is cold says so
+  (`rootArchived`). There is no message search to annotate. Proof:
+  `retention-policy.use-case.spec`, `restore-partition.use-case.spec`, `message-archive.spec`,
+  `maintenance.consumer.spec`, the hold against Postgres in `pg-partition-archive.gateway.spec`,
+  and `conversation-names.spec`; walked: the retention screen offers hot months on `messages`
+  only, its siblings say they follow it, and one save wrote all three rows. `25648757..acde8f7f`.
+
 ---
 
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **`26.4` built, superseding D47:** message months may go to cold storage as one group, never dropped, restored and held by a platform admin; the conversation says what is archived. And `WK.7`, the sidebar shell |
 | 2026-11-12 | @sami | **`WK.1`–`WK.6` closed:** starting a conversation, picker placeholders, the saved line, retention's untouched form, grant focus and the required reason. `WK.7` waits on a decision |
 | 2026-11-12 | @sami | **The browser walks and the benchmark:** `UI.1`, `DC.9`, `LP.1`, `LP.3` and `AI.2` closed, five fixes on the way and seven findings opened as `WK.1`–`WK.7` |
 | 2026-11-12 | @sami | **`CR.20` closed, and section 10 with it:** the projection walks only tenants with new rows, with an hourly sweep for a lost mark |

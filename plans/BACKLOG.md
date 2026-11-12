@@ -29,7 +29,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 1 | `archive/PLAN.md` boxes, Phases 23–25 | 1 | 32 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
-| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 2 | 7 |
+| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 1 | 8 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
 | 19 | Review of 2026-10-10 | 0 | 23 |
@@ -42,8 +42,8 @@ closed 15, 16, 17 and 22. Their entries are in `archive/DONE.md`, the walks unde
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
-**Section 11 is down to two that need a decision or hardware**: `26.4` reopens D47, and `26.8`
-needs a machine that holds 250 000 users. **Section 13 is a trigger**, `AX11.2`. **Section 23 is
+**Section 11 is down to one that needs hardware**: `26.8` needs a machine that holds 250 000
+users. `26.4` closed 2026-11-12, superseding D47. **Section 13 is a trigger**, `AX11.2`. **Section 23 is
 closed.**
 
 ---
@@ -106,9 +106,6 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 
 ### Messaging
 
-- [ ] `26.4` **Old `messages` partitions archived to S3.** Parked pending a discussion: it reopens
-  decision D47. The reads that grew with it are bounded now (`CP2.2`, `CP2.3`), which weakens the
-  case. — `archive/COMMUNICATION.md:29`
 - [ ] `26.8` **The 250 000-recipient fan-out load test.** Needs a machine that can hold a `users`
   row per recipient. Measures the paged fan-out and batched suppression from `CP4.3`, `CP4.6`.
   — `archive/COMMUNICATION.md:32`
