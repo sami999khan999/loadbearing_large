@@ -24,12 +24,17 @@ export interface RestoreRequest extends ArchiveRequest {
   readonly organizationId: OrganizationId;
 }
 
+export interface HoldRequest extends RestoreRequest {
+  readonly until: Date;
+}
+
 // Records what it was asked for. The real gateway detaches and drops a partition, so a
 // test that used it would destroy the fixture it was asserting on.
 export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   private readonly requests: ArchiveRequest[] = [];
   private readonly restores: RestoreRequest[] = [];
   private readonly stamps: RestoreRequest[] = [];
+  private readonly holdRequests: HoldRequest[] = [];
   private entries: readonly PartitionArchiveEntry[] = [];
   private readonly forgotten: ArchiveRequest[] = [];
   private readonly sweeps: OrganizationId[] = [];
@@ -82,6 +87,20 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
       scratchTable: `${table}_restore`,
       rowCount: 0,
     });
+  }
+
+  public override hold(
+    table: PartitionedTableName,
+    period: Date,
+    organizationId: OrganizationId,
+    until: Date,
+  ): Promise<void> {
+    this.holdRequests.push({ table, period, organizationId, until });
+    return Promise.resolve();
+  }
+
+  public holds(): readonly HoldRequest[] {
+    return this.holdRequests;
   }
 
   public override markProjected(

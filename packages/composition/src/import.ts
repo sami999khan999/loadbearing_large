@@ -158,6 +158,7 @@ export {
   MarkdownRenderer,
   MarkNotificationReadUseCase,
   MemberRealtimeSubscriber,
+  MessageArchive,
   MessagingRealtimeSubscriber,
   MoveDocPageUseCase,
   MoveTenantUseCase,

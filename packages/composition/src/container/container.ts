@@ -153,6 +153,7 @@ import {
   MemberRealtimeSubscriber,
   type MembershipEnroller,
   type MembershipReader,
+  MessageArchive,
   MessagingRealtimeSubscriber,
   MoveDocPageUseCase,
   MoveTenantUseCase,
@@ -1213,6 +1214,8 @@ export class Container {
     // One instance, shared: the membership check is the same question every messaging
     // use-case asks, and a second copy is a second place for it to drift.
     const conversationAccess = new ConversationAccess(conversations);
+    // Which message months are cold only (`26.4`), so a conversation can say so.
+    const messageArchive = new MessageArchive(this.partitionArchive, this.clock);
     // Catalog-placed, beside a routed repository on purpose: a conversation's members
     // are routed and their names are not, so the two are read apart and joined here.
     const conversationNaming = new ConversationNaming(
@@ -1298,6 +1301,7 @@ export class Container {
         messages,
         messageReactions,
         messageAttachments,
+        messageArchive,
       ),
       listThread: new ListThreadUseCase(
         this.authorizer,
@@ -1305,6 +1309,7 @@ export class Container {
         messages,
         messageReactions,
         messageAttachments,
+        messageArchive,
       ),
       react: new ReactToMessageUseCase(
         this.authorizer,
