@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-10-19
+updated: 2026-11-12
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -29,7 +29,6 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 1 | `archive/PLAN.md` boxes, Phases 23–25 | 1 | 32 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
-| 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 1 | 48 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 2 | 7 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
@@ -39,14 +38,13 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 19 | Review of 2026-10-10 | 0 | 23 |
 | 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 1 | 4 |
 
-Sections 2, 4, 5, 7, 8, 9, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
+Sections 2, 4, 5, 7, 8, 9, 10, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
-check's 17 and `WC.1`. Their entries are in `archive/DONE.md` under the same numbers.
+check's 17, `WC.1` and all forty-nine of the 2026-09-25 review. Their entries are in `archive/DONE.md` under the same numbers.
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
-**Section 10 is down to one narrowed remainder** of the 2026-09-25 review; the other forty-eight,
-the shipped security defects among them, are closed. **Section 11 is the next work**: the
+**Section 11 is the next work**: the
 communication features, which waited on the performance plan and are built on top of it now.
 **Sections 13 to 17 are down to a trigger, hand walks, a benchmark and one deferred design**
 (`RV.3`); the rest of each closed on 2026-10-10 and is in `archive/DONE.md`. **Section 19**
@@ -99,19 +97,6 @@ a feeling.
 **`max_locks_per_transaction` stays 1 024** until a node heads toward `24.7`'s ~1 800 tenants. Past
 that, one unpruned read of `notifications` at full retention exhausts the lock table. Nothing in the
 application issues one. — `PF.7`, `archive/DONE.md` §9
-
----
-
-## 10. Code review of 2026-09-25 — what is left of it
-
-Forty-eight of the forty-nine findings are closed and in [`archive/DONE.md`](archive/DONE.md) §10,
-each with its proof. This one was fixed in its main part and keeps a smaller one; the body is in
-[`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) at the line given.
-
-- [~] `CR.20` **A caught-up tenant still costs the projection three round trips.** The run now
-  rotates its start, passes a failing tenant and stops paging once its budget is spent, so no
-  tenant starves. What is left is that a run is O(tenants) for tenants with nothing to project.
-  — `archive/REVIEW-2026-09-25.md:157`
 
 ---
 

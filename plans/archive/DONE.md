@@ -1107,7 +1107,7 @@ Bodies in [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md), at the line each backl
 Twenty closed with the communication performance plan, pushed as `14d49db..45633e6` and listed
 in that plan's changelog; twenty-six more closed on 2026-09-26 in the per-layer commits after
 `e265714`, three of them the rest of what the plan had closed in part, and `CR.16` later that day.
-Two stay open in `BACKLOG.md` §10, narrowed to what is left of them: `CR.20` and `CR.33`.
+Two stayed open in `BACKLOG.md` §10, narrowed: `CR.33` closed 2026-10-10 and `CR.20` 2026-11-12.
 **Every proof below is a spec that runs in `pnpm test` or `pnpm smoke`**,
 unless it says otherwise.
 
@@ -1258,6 +1258,19 @@ unless it says otherwise.
   Old inline-text jobs are read for one release. Proof: `document.use-case.spec.ts` asserts the
   payload has no text and the bucket holds it; `index-queued-document.use-case.spec.ts` asserts the
   object goes after a success and stays after a throw. `6f197268..95777020`, `ef48f12d`.
+
+### 10.H Closed 2026-11-12
+
+- [x] `CR.20` **A caught-up tenant still cost the projection its round trips** `done: 2026-11-12`
+  — the activity logger and the usage repository mark the tenant in a Redis sorted set scored by
+  its latest write, and a run walks only the marked tenants, oldest first. A caught-up tenant is
+  cleared only through the walk's settle horizon, and one the budget cut off or whose walk threw
+  is marked again at the back. A lost mark is caught by a sweep of every tenant, run whenever
+  `analytics:project:swept` is missing and set for an hour once a sweep finishes. The completion
+  line says `mode: "marked" | "sweep"`. Proof: `analytics.consumer.spec.ts` walks only the marked
+  tenant, sweeps until a sweep finishes, keeps a mark inside the horizon and sweeps when the marks
+  cannot be read; `pg-activity-replay.reader.spec.ts` shows the logger marking; the Redis smoke
+  shows `GT` and the compare-and-remove. `cc4a654a..eb054352`.
 
 ---
 
@@ -2037,6 +2050,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **`CR.20` closed, and section 10 with it:** the projection walks only tenants with new rows, with an hourly sweep for a lost mark |
 | 2026-11-12 | @sami | **`26.3` closed:** web push, a third channel |
 | 2026-11-12 | @sami | **`26.1` closed:** threads, the last of it |
 | 2026-11-11 | @sami | **`26.7` closed:** channel mentions, the last of it |
