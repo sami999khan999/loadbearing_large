@@ -1724,7 +1724,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 **Split on 2026-09-22.** This file had grown to eighty-four closed entries against nineteen open
 ones, and a ledger you scroll past four-fifths of to reach the work is one nobody opens. Every
-closed entry moved to [`archive/DONE.md`](archive/DONE.md) with its proof intact and its ID
+closed entry moved to [`archive/DONE.md`](DONE.md) with its proof intact and its ID
 unchanged, and the changelog went with them. What is left here is the work.
 
 **Every archived plan was checked and carries nothing of its own.** Every `[ ]` in
@@ -1752,7 +1752,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 **Every item on the 2026-09-24 list is done except one**, and that one is skipped with its reasons
 in its entry. Everything is committed on `dev` and **not pushed**. Build, typecheck, lint, all 29
 architecture assertions with none skipped, the full test suite and the smoke suite are green. What
-closed, each with its proof in [`archive/DONE.md`](archive/DONE.md):
+closed, each with its proof in [`archive/DONE.md`](DONE.md):
 
 | ID | What | Proof |
 |---|---|---|
@@ -1766,7 +1766,7 @@ closed, each with its proof in [`archive/DONE.md`](archive/DONE.md):
 
 **`23.14` and `23.21` closed later the same day, decided with the user.** Doing `23.14`
 end to end found a sign-up regression from `24.2a`, and that is fixed too — see
-[`archive/DONE.md`](archive/DONE.md) §1.
+[`archive/DONE.md`](DONE.md) §1.
 
 **What is left is not a session's to do.** `S.2` waits for real traffic. `S.3` waits for a node
 that is provisioned rather than a second container. Section 6 is triggers, none fired. The
@@ -1778,13 +1778,13 @@ whole-plan verification's reading pass was done on 2026-09-25 and is in section 
 
 **One box left of nineteen.** The three recommendations, the eight browser clauses and the eight
 found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
-[`archive/DONE.md`](archive/DONE.md) §1 with what each was measured against.
+[`archive/DONE.md`](DONE.md) §1 with what each was measured against.
 
 **Empty.** `23.14` closed on 2026-09-25, decided with the user — see
-[`archive/DONE.md`](archive/DONE.md) §1.
+[`archive/DONE.md`](DONE.md) §1.
 
 **`24.1`–`24.6` are built, and `24.7` waits on a relation count no node has reached** —
-[`archive/DONE.md`](archive/DONE.md) §1. A tenant can be moved, a move under load loses no
+[`archive/DONE.md`](DONE.md) §1. A tenant can be moved, a move under load loses no
 acknowledged write, a moved tenant's catalog audit rows reach its own node through the outbox, a
 job still writing after the settle is refused rather than landing on the source, and the
 projection reads from a standby once it has caught up.
@@ -1792,13 +1792,13 @@ projection reads from a standby once it has caught up.
 ### Phase 25 — The replica panel and the shard map 📁
 
 **Empty.** `25.1` and `25.2` closed with `24.3` on 2026-09-25, and `25.3` the same day —
-[`archive/DONE.md`](archive/DONE.md) §1.
+[`archive/DONE.md`](DONE.md) §1.
 
 ### §2 — the closing notes
 
 
 **Empty. All forty-five were fixed on 2026-09-20** and are in
-[`archive/DONE.md`](archive/DONE.md) §2, each with the proof and the specs written for it.
+[`archive/DONE.md`](DONE.md) §2, each with the proof and the specs written for it.
 
 Two are worth finding again without reading the whole list. `R.9` is the one defect that ships
 with **no unit test**, because `session.fn.ts` calls `createServerFn` at module scope and hangs
@@ -1843,7 +1843,7 @@ work `R.2` fixed. The file is 7 passed.
 Each of these sits under a `[x]` in `archive/PLAN.md` as an `unfinished:`, `concern:` or `corrected:` note.
 Re-checked against the tree on 2026-09-20; the ones that turned out to be resolved are listed at
 the end so nobody chases them. **None is open**: `16.12`, the last, closed with `PF.0` on
-2026-09-24 — [`archive/DONE.md`](archive/DONE.md) §4.
+2026-09-24 — [`archive/DONE.md`](DONE.md) §4.
 
 **Checked and already resolved**, so the notes in `archive/PLAN.md` and `archive/OPEN.md` are stale rather than
 open: `22.12`'s "the two unit-of-work instances are not bound per slice yet" —
@@ -1865,7 +1865,7 @@ setup step the 2026-09-20 walk had not taken; it moves her `loadbearing` members
 to `platform_admin`, which is the tier by construction.
 
 **Two accounts, four organizations, and every clause below the API actually called.** What each
-clause was measured against is in [`archive/DONE.md`](archive/DONE.md) §5; what the pass left
+clause was measured against is in [`archive/DONE.md`](DONE.md) §5; what the pass left
 behind is in the state table at the end of this file. Two findings are worth carrying here rather
 than burying in a tick, because the next walk needs them:
 
@@ -1880,25 +1880,25 @@ than burying in a tick, because the next walk needs them:
   the next walk files a defect against a button that works.
 
 **The whole-plan verification closed on 2026-09-25**, both halves — the command block and all 26
-Exit lines by hand. [`archive/DONE.md`](archive/DONE.md) §5 has what was found.
+Exit lines by hand. [`archive/DONE.md`](DONE.md) §5 has what was found.
 
 ### §7 and §8 — the closing notes
 
 
 **Empty.** `T-036` closed on 2026-09-25 with its "Done when" narrowed as decided, so Phase 26
 lives in [`COMMUNICATION.md`](COMMUNICATION.md) rather than on this row. `T-037` and `T-038`
-closed on 2026-09-21. All three are in [`archive/DONE.md`](archive/DONE.md) §7.
+closed on 2026-09-21. All three are in [`archive/DONE.md`](DONE.md) §7.
 
 
 **Empty.** All six closed on 2026-09-21 and 2026-09-22 —
-[`archive/DONE.md`](archive/DONE.md) §8. The last of them was never a doc edit at all: three
+[`archive/DONE.md`](DONE.md) §8. The last of them was never a doc edit at all: three
 copies of the `DATABASE_SHARD_<n>_URL` reader, which stay three copies and now run one algorithm,
 held together by assertion 29.
 
 ### §9 — the performance summary
 
 
-**Empty. All eight closed on 2026-09-24** and are in [`archive/DONE.md`](archive/DONE.md) §9, each
+**Empty. All eight closed on 2026-09-24** and are in [`archive/DONE.md`](DONE.md) §9, each
 with its before and after. The short version, at 2 000 tenants on one node:
 
 | | before | after |
@@ -1935,7 +1935,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 ## 21. Worker control — closed
 
-- [x] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](../WORKER-CONTROL-PLAN.md)** `done: 2026-10-10` —
+- [x] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md)** `done: 2026-10-10` —
   `WORKER_QUEUES` chooses a process's queues, and the platform **Workers** page shows every live
   process and queue. From it an admin pauses a queue everywhere, one process, or one queue on one
   process; moves queues between processes; and autoscales a queue's concurrency between a minimum
@@ -1972,7 +1972,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   404 after; `/assistant` and `/dashboard` stay 200. `/messages/<unknown id>` still answers 500,
   because its procedure says `FORBIDDEN` rather than `NOT_FOUND`: that is `AI.4`.
 
-- [x] `AI.1` **Build [`AI-CHAT-PLAN.md`](../AI-CHAT-PLAN.md) — the AI Assistant** `done: 2026-11-10`
+- [x] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant** `done: 2026-11-10`
   — every step of the plan is built: the model adapters, tables, use cases, Redis answer stream,
   transport and lane (2026-10-14 to 10-19), the client and UI (10-19), usage reporting (11-10)
   and the scale section with its load test (11-10). **Proof:** the full gates; the assistant

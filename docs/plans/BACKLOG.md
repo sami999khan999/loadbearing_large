@@ -10,8 +10,8 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 
 **This is the only open ledger, and it holds only what is open.** What has closed is in
 [`archive/DONE.md`](archive/DONE.md). What sessions left on a developer machine is in
-[`archive/STATE.md`](archive/STATE.md). Everything else in `plans/` is history, except a plan
-still being built, which its section here names, and `HANDOFF.md`.
+[`archive/STATE.md`](archive/STATE.md). Every finished plan is in [`archive/`](archive/index.md); the
+only other live file is `HANDOFF.md`.
 
 > **How to use this file**
 >
@@ -31,20 +31,17 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 1 | 8 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
-| 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
-| 19 | Review of 2026-10-10 | 0 | 23 |
-| 23 | Found walking the big kit in a browser, 2026-11-12 | 0 | 12 |
 
-Sections 2, 4, 5, 7, 8, 9, 10, 12, 15, 16, 17, 18, 20, 21 and 22 are closed in full: 45 defects, 6 buried items, 9
+Sections 2, 4, 5, 7 to 10, 12 and 14 to 23 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
-check's 17, `WC.1`, all forty-nine of the 2026-09-25 review, and the hand walks and benchmark that
-closed 15, 16, 17 and 22. Their entries are in `archive/DONE.md`, the walks under §23.
+check's 17, `WC.1`, all forty-nine of the 2026-09-25 review, the 2026-09-28 and 2026-10-10
+reviews, and the hand walks and benchmark that closed 15, 16, 17, 22 and 23. Their entries are in
+`archive/DONE.md`, the walks under §23.
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
 **Section 11 is down to one that needs hardware**: `26.8` needs a machine that holds 250 000
-users. `26.4` closed 2026-11-12, superseding D47. **Section 13 is a trigger**, `AX11.2`. **Section 23 is
-closed.**
+users. `26.4` closed 2026-11-12, superseding D47. **Section 13 is a trigger**, `AX11.2`.
 
 ---
 
@@ -110,9 +107,6 @@ The full original text is in `archive/PLAN.md` under the same IDs.
   row per recipient. Measures the paged fan-out and batched suppression from `CP4.3`, `CP4.6`.
   — `archive/COMMUNICATION.md:32`
 
-### Email
-
-### Notifications
 
 ---
 
@@ -128,39 +122,6 @@ on 2026-09-30.
   `core.hidden-widgets`, both `assertOn` calls and the `DISMISSAL` checks in `feature` and
   `apps/web`. **Trigger:** the flag is on for every org, and in any case before its `expiresOn` of
   2027-03-31. It is off everywhere today. — `archive/ACCESS-AND-VISIBILITY-PLAN.md:1373`
-
----
-
-## 14. Code review of 2026-09-28 — and the plan's review before it starts
-
-A review of the code changed since the 2026-09-25 review (`14d49db..2ee420a`), and of
-`ACCESS-AND-VISIBILITY-PLAN.md` before its first box is ticked. IDs are `RV.<n>`, new. Each body is
-here rather than in an archived file, because there is no archived file for it yet; line numbers
-are as of `2ee420a`. Each was checked against the code, and the scenario says what triggers it.
-
-### Code
-
-### The access and visibility plan — improvements before Phase 1
-
-All seven, `RV.10`–`RV.16`, were folded into `ACCESS-AND-VISIBILITY-PLAN.md` on 2026-09-28,
-before its first box was ticked. They are in [`archive/DONE.md`](archive/DONE.md) §14.
-
----
-
-## 19. Review of 2026-10-10 — what is left
-
-Two reviewers read the code both kits share after the 2026-10-10 fixes. One finding was false
-(oRPC's fetch `RPCHandler` already adds `StrictGetMethodPlugin`, so no cross-site GET reaches a
-mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
-[`archive/DONE.md`](archive/DONE.md) §19, and lite has each shared one too. One is left.
-
-
-## 23. Found walking the big kit in a browser, 2026-11-12
-
-`DC.9`, `UI.1`, `LP.1`, `LP.3` and `AI.2` were walked and measured on 2026-11-12, in headless
-Chromium over the DevTools protocol; they are in [`archive/DONE.md`](archive/DONE.md) §23 with
-five fixes found on the way. Seven more were found and logged as `WK.<n>`, all closed the same
-day and there too.
 
 ---
 

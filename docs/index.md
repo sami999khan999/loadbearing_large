@@ -29,6 +29,9 @@ before the trees, if the question is "where does anything actually go".
 [every package and every file](explained/codebase/index.md) in plain words. When it and a tree
 disagree, the tree is the precise one.
 
+[The plans](plans/index.md) hold what is left to do, in one backlog, and every finished plan in
+`plans/archive/`.
+
 ## Which of the first two do I read?
 
 `ai/` holds the rule; `opinions/` holds the reason. A rule file averages ~850 tokens and tells you what to

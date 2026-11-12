@@ -549,11 +549,11 @@ Each of these is days, not months, because the seam already exists. **Do not bui
 | 1 | Add an index, rewrite a query | A single slow query | Hours |
 | 2 | KPI snapshot tables | Dashboard over 1s on a warm cache | A day |
 | 3 | Read replica for dashboards | Reads competing with writes | A day; one adapter change |
-| 4 | pgBouncer, transaction mode | Past ~100 connections | **Built** — always on, since `plans/archive/DB-SCALING-PLAN.md` Phase 1 |
+| 4 | pgBouncer, transaction mode | Past ~100 connections | **Built** — always on, since `docs/plans/archive/DB-SCALING-PLAN.md` Phase 1 |
 | 5 | ClickHouse reads, behind a new `AnalyticsReader` | Snapshots stop covering ad-hoc queries | **One env var, then a day** |
 | 6 | A dedicated vector DB behind `VectorStore` | pgvector recall or latency degrades | Days |
 | 7a | The routing seam — cluster, directory, placements | — | **Built**, at one node ([4.5](#45-route-by-key-from-the-first-line)) |
-| 7b | The physical split: a second Postgres, tenants moved | Writes past a single primary | Weeks → **days**; `plans/archive/PLAN.md` Phase 24 |
+| 7b | The physical split: a second Postgres, tenants moved | Writes past a single primary | Weeks → **days**; `docs/plans/archive/PLAN.md` Phase 24 |
 | 8 | Broker-backed event bus | In-process dispatch saturates | Days — needs §6 |
 
 Most products never get past #2. Each step is ordered by cost, so exhaust the cheap ones first —

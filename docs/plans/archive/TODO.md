@@ -107,7 +107,7 @@ probe.
     A port, an adapter and a `Container` line land together or not at all — that is what `P5.11`
     established.
   - **Build the interface broker-shaped**, because these four are what Kafka or Redis Streams
-    cannot give back later ([Data and scale](../../docs/opinions/data-and-scale.md) §7):
+    cannot give back later ([Data and scale](../../opinions/data-and-scale.md) §7):
     - `publish` is async and returns nothing — a caller reading a return value is doing RPC.
     - Handlers are idempotent, keyed on a stable event id: at-least-once is what every broker offers.
     - No ordering assumptions. Two events published in order may be handled out of order.
@@ -448,7 +448,7 @@ probe.
     - It is a **new port**, separate from `AnalyticsProjector`. A single port with both would put
       `project()` on the object a dashboard query holds.
     - **Read-only by construction.** A write method is the moment a derived store becomes
-      authoritative ([Data and scale](../../docs/opinions/data-and-scale.md) §2).
+      authoritative ([Data and scale](../../opinions/data-and-scale.md) §2).
     - **Any permitted scope arrives resolved**, as `VectorStore.search()` takes `goalIds`. A remote
       analytics store holds no `CapabilitySet` and can join back to nothing.
     - **Periods are ISO `YYYY-MM-DD` strings**, not `Date`s: `date_trunc` and `toYYYYMM` return

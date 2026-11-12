@@ -392,7 +392,7 @@ at about 32 ÷ 3 s, and the excess shows as time to the first word, which is que
 process and one realtime process carried 60 open streams without an error. Read the numbers as a
 shape, not a capacity: development mode, one machine, and a provider that never slows down.
 
-For the plan's 100K users (`plans/AI-CHAT-PLAN.md`: about 5K answers at once, a 10K peak):
+For the plan's 100K users (`docs/plans/archive/AI-CHAT-PLAN.md`: about 5K answers at once, a 10K peak):
 
 | Bottleneck | What moves it |
 |---|---|

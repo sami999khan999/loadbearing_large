@@ -3,7 +3,7 @@
 **Nothing here is edited — with one exception, named below.** Every other file is the record of
 what was planned, decided and believed at the time it was written. A line that has since gone
 stale stays stale: correcting it would make the record worse, not better. The open ledger is
-[`../BACKLOG.md`](../BACKLOG.md), and that is the only file in `plans/` where a box is ticked.
+[`../BACKLOG.md`](../BACKLOG.md), and that is the only file in `docs/plans/` where a box is ticked.
 
 **The exception is [`DONE.md`](DONE.md), and it is appended to rather than edited.** It is the
 closed half of `BACKLOG.md`, split out on 2026-09-22 when eighty-four closed entries were crowding
@@ -13,7 +13,7 @@ growth, not revision: no line already in it is rewritten.
 **One exception, and it is not content: a link broken by the move itself is repaired.** A file one
 folder deeper needs `../../docs/` where it wrote `../docs/`, and leaving that would make the record
 unnavigable rather than faithful. Every relative link in this folder resolves; nothing a link points
-*at* was touched.
+*at* was touched. The same repair was made on 2026-11-12, when `plans/` moved into `docs/plans/`.
 
 **What is still worth reading here**, and it is most of it: every entry in `BACKLOG.md` is a summary
 with a pointer, and the body it points at is in one of these files. Read the body before acting on
@@ -22,6 +22,8 @@ a summary.
 | File | What it holds | Moved |
 |---|---|---|
 | [`DONE.md`](DONE.md) | **The only file here that grows.** Every entry `BACKLOG.md` has closed — 84 of them — with the proof each was ticked on, and that file's changelog | 2026-09-22 |
+| [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | The AI Assistant: ask OpenAI, OpenRouter or Gemini about data the reader may see, sized for 100K concurrent users. Built 2026-10-19, walked in a browser 2026-11-12 (`AI.2`); lite's port is its own plan there | 2026-11-12 |
+| [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md) | Runtime queue assignment, queue pause and in-process autoscaling from the platform dashboard. Built 2026-10-10, with its as-built differences at the top | 2026-11-12 |
 | [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | Eleven phases of access and visibility — flags, entitlement plans and the module kill switch, per-user overrides, the platform deny and account suspend, `<Zone>`, `<Widget>` and `/dashboard`, widget preferences, the inspector and the `lazy()` ban. Built 2026-09-28 to 2026-09-30, and walked end to end; what is left is `BACKLOG.md` §13 | 2026-09-30 |
 | [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md) | Forty-nine findings from five reviews of `dev` at `b58e748` — bugs, scaling limits, leaks and security. The bodies only: every box is in `BACKLOG.md` §10, pointing at a line here | 2026-09-26 |
 | [`COMMUNICATION-PERFORMANCE-PLAN.md`](COMMUNICATION-PERFORMANCE-PLAN.md) | Seven phases that took realtime, messaging, notifications and email off the web app's path — the `apps/realtime` stream process, `packages/api-server`, the outbox lease, batched fan-out and digest, longer retries. Built 2026-09-26; what is left is `BACKLOG.md` §12 | 2026-09-26 |

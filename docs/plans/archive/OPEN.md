@@ -24,9 +24,9 @@ Landed as described, in three places: the `sharding.md` paragraph, the spec comm
 `24.1` inventory's own "drops nine constraints" is now ten.
 
 
-**Where.** [`packages/infrastructure/docs/reference/sharding.md`](../../packages/infrastructure/docs/reference/sharding.md)
+**Where.** [`packages/infrastructure/docs/reference/sharding.md`](../../../packages/infrastructure/docs/reference/sharding.md)
 lines 183–188, and the comment at
-[`packages/infrastructure/tests/smoke/sharded.smoke.spec.ts`](../../packages/infrastructure/tests/smoke/sharded.smoke.spec.ts)
+[`packages/infrastructure/tests/smoke/sharded.smoke.spec.ts`](../../../packages/infrastructure/tests/smoke/sharded.smoke.spec.ts)
 lines 219–220.
 
 **What is wrong.** Both say "Nine routed tables carry a foreign key to a catalog one" and list
@@ -159,7 +159,7 @@ what keeps the neighbouring "`MailConsumer` is the only thing that sends" true. 
 its row and the description now says six.
 
 
-**Where.** [`apps/worker/docs/reference/consumers.md`](../../apps/worker/docs/reference/consumers.md)
+**Where.** [`apps/worker/docs/reference/consumers.md`](../../../apps/worker/docs/reference/consumers.md)
 lines 224–227, the `> [!NOTE]` block.
 
 **What is wrong.** It says `QueueName.NOTIFICATION` "still has no consumer", that it "gains one
@@ -183,13 +183,13 @@ and its schedule landed in `6e31052`; the follow-ups — per-tenant hour, groupi
 
 The block had a second problem the draft did not catch: it wrote `public static readonly ALL = [...]`,
 which freezes the binding and not the array — the static mutable state
-[`classes`](../../docs/ai/rules/classes.md) bans, in a guide that tells the reader to write this file.
+[`classes`](../../ai/rules/classes.md) bans, in a guide that tells the reader to write this file.
 So the whole block was replaced with the real source, module constants and `Object.freeze` included,
 which fixes the missing `EVENT` and the banned shape together. A short note under it says why the
 freeze is there, so the next reader does not simplify it back.
 
 
-**Where.** [`docs/setup/15-infrastructure-package.md`](../../docs/setup/15-infrastructure-package.md)
+**Where.** [`docs/setup/15-infrastructure-package.md`](../../setup/15-infrastructure-package.md)
 lines 471–487, the `ts` block under Step 15.4.
 
 **What is wrong.** The block lists five queues — `EMBEDDING`, `NOTIFICATION`, `ANALYTICS`,
@@ -231,7 +231,7 @@ only factory that reaches the private constructor. What a node carries is declar
 that §23 asserts are the only ones in `src/`, and the empty-cluster check now lives once, in `of`.
 
 
-**Where.** [`packages/infrastructure/src/pg/primitive/database-cluster.ts`](../../packages/infrastructure/src/pg/primitive/database-cluster.ts)
+**Where.** [`packages/infrastructure/src/pg/primitive/database-cluster.ts`](../../../packages/infrastructure/src/pg/primitive/database-cluster.ts)
 lines 53–57.
 
 **What is wrong.** `of(nodes, resolver)` was added for the sharded smoke and maps a list of
@@ -342,7 +342,7 @@ Neither tests a file, so the mirror rule has no answer for them, and a rule with
 invented per author. That is what the existing drift was.
 
 
-**Where.** [`docs/ai/rules/files.md`](../../docs/ai/rules/files.md): "Tests mirror `src/` and never
+**Where.** [`docs/ai/rules/files.md`](../../ai/rules/files.md): "Tests mirror `src/` and never
 live inside it. `src/error/app.error.ts` → `tests/error/app.error.spec.ts`", against
 `packages/infrastructure/tests/`.
 

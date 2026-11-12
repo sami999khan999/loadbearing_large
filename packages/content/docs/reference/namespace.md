@@ -119,7 +119,7 @@ Two properties at once:
   the type boundary are the same boundary.**
 
 The cost is that a new locale cannot land half-finished, and the English fallback layer beneath it
-was unreachable for anything that compiles. `23.15` in `plans/BACKLOG.md` settled that trade-off by
+was unreachable for anything that compiles. `23.15` in `docs/plans/BACKLOG.md` settled that trade-off by
 dropping the layer rather than keeping a safety net nothing could reach: `StaticContentSource`
 leaves `base` empty, and English arrives in `overrides` like every other locale.
 

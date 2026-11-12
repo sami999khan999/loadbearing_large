@@ -104,7 +104,7 @@ the word. Every name below is `assistant`.
   - a subscriber that queues sections into the embedding pipeline with `sourceType: "doc"`;
   - a hybrid rank in `DocSearch`.
 - **1, model interface and adapters** — **done 2026-10-14**, see
-  [`assistant.md`](../packages/infrastructure/docs/reference/assistant.md). The fake is
+  [`assistant.md`](../../../packages/infrastructure/docs/reference/assistant.md). The fake is
   `CannedAssistantModel` in `canned/`; the shared stream code is `sse/`. The budget and concurrency
   env vars below arrive with the steps that read them:
   - Port `application/src/port/assistant.model.ts`:
@@ -135,7 +135,7 @@ the word. Every name below is `assistant`.
 - **3, application** (`application/src/assistant/`) — **done 2026-10-19**: the seven use cases,
   `FailStaleAssistantAnswersUseCase`, `AssistantRetrieval`, both stream ports, and
   `DocPageRepository.listSections` for the full text of a matched section. The reasoning is
-  [`application/…/assistant.md`](../packages/application/docs/reference/assistant.md). Before that, **the three repository ports done 2026-10-14**
+  [`application/…/assistant.md`](../../../packages/application/docs/reference/assistant.md). Before that, **the three repository ports done 2026-10-14**
   (`AssistantThreadRepository`, `AssistantMessageRepository`, `AssistantUsageRepository` over
   `ai_usage`), with their Pg adapters and an integration spec, `AssistantPromptBuilder`, and the
   daily budget (`AssistantBudget` over `AssistantBudgetStore`, Redis on the queue instance until

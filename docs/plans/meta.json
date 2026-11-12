@@ -1,0 +1,5 @@
+{
+  "title": "Plans",
+  "description": "What is left in the big kit, and every finished plan",
+  "pages": ["index", "BACKLOG", "HANDOFF", "archive"]
+}
