@@ -60,6 +60,9 @@ export function RetentionPreviewNotice({
     onReady(ready);
   }, [ready, onReady]);
 
+  // Blank is the table's default, which for a never-dropped table is no number at all;
+  // there is nothing to preview, and nothing wrong (`WK.4`).
+  if (hotMonths.trim() === "") return null;
   if (settled === null) return <p>{t("platform.retention.preview.invalid")}</p>;
   if (preview.isPending) return <p>{t("platform.retention.preview.loading")}</p>;
   if (preview.isError) return <p>{t("platform.retention.preview.failed")}</p>;

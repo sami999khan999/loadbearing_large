@@ -92,7 +92,9 @@ export function RetentionPolicyForm() {
         // about a call that failed after the commit.
         drifted ? (
           <Callout tone="warning">
-            {t("platform.retention.drift", { actual: lifecycle.applied.join(", ") || "—" })}
+            {lifecycle.applied.length === 0
+              ? t("platform.retention.driftEmpty")
+              : t("platform.retention.drift", { actual: lifecycle.applied.join(", ") })}
           </Callout>
         ) : null
       }
