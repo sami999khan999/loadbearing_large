@@ -1645,7 +1645,7 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     production has no users, so there is no user-visible copy for `content` to own. Translating
     them would mean a `dev` namespace in `ClientNamespace` and `NamespaceShape` plus two catalog
     cells — structure built so that nobody can read it, which is what
-    [`simplicity`](../../docs/ai/rules/simplicity.md) asks about first. Recorded in `ui/docs`.
+    [`simplicity`](../../ai/rules/simplicity.md) asks about first. Recorded in `ui/docs`.
 
 **Exit.** `grep -rn` for each deleted symbol returns nothing; every remaining permission key in
 `CATALOG` is used by at least one `PROCEDURE_PERMISSIONS` entry (add that as a

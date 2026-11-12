@@ -62,7 +62,10 @@ export const platform = {
   // the word "drop" on a button does not carry it.
   "platform.retention.mode.warning":
     "A month dropped this way is not in cold storage and cannot be restored.",
-  "platform.retention.neverDropped": "Never dropped — domain data.",
+  "platform.retention.neverDropped": "Kept in Postgres: no months are set, so none is archived.",
+  "platform.retention.domainData":
+    "Archived to cold storage once older than the months below, with its reactions and files, and kept there: never dropped and never expired. A platform administrator can restore a month.",
+  "platform.retention.follows": "Follows {table}: its months are archived and restored with them.",
   "platform.retention.clickhouse": "ClickHouse",
   "platform.retention.clickhouse.months": "Months of analytics history",
   "platform.retention.preview.loading": "Working out what this would drop…",
@@ -179,6 +182,8 @@ export const platform = {
   "platform.restore.period": "Month",
   "platform.restore.submit": "Restore",
   "platform.restore.queued": "Queued as {jobId}. {objects} objects to read back.",
+  "platform.retention.driftEmpty":
+    "The store holds no rules yet. The nightly run will put this right.",
   "platform.retention.drift":
     "The store holds something else. The nightly run will put this right; it now holds {actual}.",
   "platform.shards.title": "Shard map",

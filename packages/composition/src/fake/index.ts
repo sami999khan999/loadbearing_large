@@ -10,6 +10,7 @@ export { InMemoryOrganizationReader } from "./in-memory-organization.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
 export { InMemoryPlatformPolicyRepository } from "./in-memory-platform-policy.repository.js";
 export { InMemoryPresenceReader } from "./in-memory-presence.reader.js";
+export { InMemoryProjectionBacklogStore } from "./in-memory-projection-backlog.store.js";
 export { InMemoryProjectionPolicyRepository } from "./in-memory-projection-policy.repository.js";
 export { InMemoryQueueControlGateway } from "./in-memory-queue-control.gateway.js";
 export { InMemoryRateLimitStore } from "./in-memory-rate-limit.store.js";
@@ -45,7 +46,10 @@ export {
   type EnsuredPartitions,
   RecordingMaintenanceGateway,
 } from "./recording-maintenance.gateway.js";
-export { RecordingPartitionArchiveGateway } from "./recording-partition-archive.gateway.js";
+export {
+  type HoldRequest,
+  RecordingPartitionArchiveGateway,
+} from "./recording-partition-archive.gateway.js";
 export { RecordingPushSender } from "./recording-push.sender.js";
 export { type PublishedJob, RecordingQueuePublisher } from "./recording-queue.publisher.js";
 export {

@@ -153,6 +153,7 @@ import {
   MemberRealtimeSubscriber,
   type MembershipEnroller,
   type MembershipReader,
+  MessageArchive,
   MessagingRealtimeSubscriber,
   MoveDocPageUseCase,
   MoveTenantUseCase,
@@ -229,6 +230,7 @@ import {
   PreviewRetentionChangeUseCase,
   Principal,
   PrincipalBuilder,
+  type ProjectionBacklogStore,
   type ProjectionPolicyRepository,
   PublishDocPageUseCase,
   PurgeOrganizationUseCase,
@@ -252,6 +254,7 @@ import {
   RedisCacheStore,
   RedisConnection,
   RedisPresenceReader,
+  RedisProjectionBacklogStore,
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
@@ -542,6 +545,8 @@ export class Container {
   private readonly assistantUsageProjector: AssistantUsageProjector | undefined;
   // The walk the projection reads `ai_usage` through, routed like every assistant table.
   public readonly assistantUsageRecords: AssistantUsageRepository;
+  // Which tenants have rows to project (`CR.20`). Present exactly when ClickHouse is.
+  public readonly projectionBacklog: ProjectionBacklogStore | undefined;
   private readonly logReader: LogReader | undefined;
 
   // ── auth, absent in a process that never authenticates ────
@@ -953,10 +958,15 @@ export class Container {
       this.localUnitOfWork,
     );
     this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
+    this.projectionBacklog = config.analytics.clickhouse
+      ? new RedisProjectionBacklogStore(this.redis.client(), this.logger)
+      : undefined;
     this.assistantUsageRecords = new PgAssistantUsageRepository(
       this.cluster,
       this.transactions,
       this.shards,
+      this.clock,
+      this.projectionBacklog ?? null,
     );
 
     // ── the swap points ──
@@ -1013,7 +1023,13 @@ export class Container {
 
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
-    const activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
+    const activity = new PgActivityLogger(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      this.clock,
+      this.projectionBacklog ?? null,
+    );
     this.activity = activity;
     this.relayedActivity = activity;
     const mailDeliveries = new PgMailDeliveryRepository(
@@ -1198,6 +1214,8 @@ export class Container {
     // One instance, shared: the membership check is the same question every messaging
     // use-case asks, and a second copy is a second place for it to drift.
     const conversationAccess = new ConversationAccess(conversations);
+    // Which message months are cold only (`26.4`), so a conversation can say so.
+    const messageArchive = new MessageArchive(this.partitionArchive, this.clock);
     // Catalog-placed, beside a routed repository on purpose: a conversation's members
     // are routed and their names are not, so the two are read apart and joined here.
     const conversationNaming = new ConversationNaming(
@@ -1283,6 +1301,7 @@ export class Container {
         messages,
         messageReactions,
         messageAttachments,
+        messageArchive,
       ),
       listThread: new ListThreadUseCase(
         this.authorizer,
@@ -1290,6 +1309,7 @@ export class Container {
         messages,
         messageReactions,
         messageAttachments,
+        messageArchive,
       ),
       react: new ReactToMessageUseCase(
         this.authorizer,
@@ -2522,8 +2542,16 @@ export class Container {
         },
       ),
       cancel: new CancelAssistantAnswerUseCase(auth, threads, messages, stream),
-      rename: new RenameAssistantThreadUseCase(auth, threads),
-      remove: new DeleteAssistantThreadUseCase(auth, threads, messages, this.activity, uow),
+      rename: new RenameAssistantThreadUseCase(auth, threads, this.realtime, this.clock),
+      remove: new DeleteAssistantThreadUseCase(
+        auth,
+        threads,
+        messages,
+        this.activity,
+        uow,
+        this.realtime,
+        this.clock,
+      ),
       stream: new StreamAssistantAnswerUseCase(auth, threads, messages, retrieval, subscriber),
       generate: this.chatModel
         ? new GenerateAssistantAnswerUseCase(

@@ -1,0 +1,1 @@
+ALTER TABLE "partition_archive" ADD COLUMN "held_until" timestamp with time zone;

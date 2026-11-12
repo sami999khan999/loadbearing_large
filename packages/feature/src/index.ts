@@ -103,6 +103,8 @@ export {
   type MemberListProps,
 } from "./member/index.js";
 export {
+  ConversationCreateForm,
+  type ConversationCreateFormProps,
   ConversationList,
   type ConversationListProps,
   MessageComposer,

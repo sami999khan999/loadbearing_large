@@ -43,8 +43,9 @@ table, in one place:
 | `document_chunks` | `organization_id` | — | — |
 
 `tenantKey: null` is "not split by tenant"; `column: null` is "tenant level only, never pruned by
-the calendar"; `retentionMonths: null` is "never retired at all", which for `messages` means domain
-data nothing drops. Every table that *is* retired goes through [cold storage](cold-storage.md)
+the calendar"; `retentionMonths: null` is "not retired unless a `retention_policy` row says so",
+which for `messages` and its two sibling tables means domain data that stays in Postgres until a
+platform admin sets a number, and is then archived, never dropped (`26.4`). Every table that *is* retired goes through [cold storage](cold-storage.md)
 first: detached, uploaded, verified, and only then dropped.
 
 **Nothing reads a copy of this list.** `TenantPartitionSeed` walks the tenant-partitioned entries,
@@ -332,8 +333,8 @@ numbers re-measured — rather than arriving as a badge that has quietly stopped
 
 At the fifteen-partition steady state the unbounded reads cost 0.21–0.87 ms, which is why they were
 left unbounded — and the tenant level narrows that set to one tenant's months rather than every
-tenant's. **That steady state does not hold for `messages`**, which is never retired: its month count
-only grows. So its two reads made on every render — a room's first page and the conversation list's
+tenant's. **That steady state does not hold for `messages`**, which is not retired by default: its month
+count grows until somebody sets a retention row. So its two reads made on every render — a room's first page and the conversation list's
 unread counts — carry a bound of their own, and the spec asserts each one prunes.
 
 ## `messages` had to give up an index to join the list

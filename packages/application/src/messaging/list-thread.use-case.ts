@@ -2,6 +2,7 @@ import { type ListThreadInput, NotFoundError } from "../import.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationAccess } from "./conversation-access.js";
 import type { MessageRepository, ThreadPageResult } from "./message.repository.js";
+import type { MessageArchive } from "./message-archive.js";
 import type { MessageAttachmentRepository } from "./message-attachment.repository.js";
 import type { MessageReactionRepository } from "./message-reaction.repository.js";
 
@@ -14,6 +15,7 @@ export class ListThreadUseCase {
     private readonly messages: MessageRepository,
     private readonly reactions: MessageReactionRepository | null = null,
     private readonly attachments: MessageAttachmentRepository | null = null,
+    private readonly archive: MessageArchive | null = null,
   ) {}
 
   public async execute(actor: Principal, input: ListThreadInput): Promise<ThreadPageResult> {
@@ -26,6 +28,10 @@ export class ListThreadUseCase {
       input.messageId,
       input.createdAt,
     );
+    // A root whose month is in cold storage is not missing, and the reader is told so.
+    if (!root && (await this.archive?.isArchived(actor.organizationId, input.createdAt))) {
+      return { items: [], newerCursor: null, rootArchived: true };
+    }
     if (!root || root.parentId !== null) throw new NotFoundError("message", input.messageId);
 
     const page = await this.messages.listReplies(

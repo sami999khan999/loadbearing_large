@@ -28,6 +28,7 @@ export {
   InMemoryOutboxGateway,
   InMemoryPlatformPolicyRepository,
   InMemoryPresenceReader,
+  InMemoryProjectionBacklogStore,
   InMemoryProjectionPolicyRepository,
   InMemoryQueueControlGateway,
   InMemoryRateLimitStore,

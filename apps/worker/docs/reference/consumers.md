@@ -131,6 +131,22 @@ kept in the cache for a day: losing it costs one run that starts at the beginnin
 budget is spent the walk stops paging the catalog too, so `tenants` on the completion line counts the
 tenants the run *reached*.
 
+**Between sweeps a run walks only the tenants with new rows** (`CR.20`). A caught-up tenant still
+cost a run four round trips, two checkpoints and two empty reads, so every run was O(tenants)
+whether or not anyone wrote. Now the activity logger and the usage repository mark the tenant in a
+Redis sorted set, `analytics:backlog`, scored by its latest write. A run reads the oldest
+thousand marks and walks those. A tenant that catches up is cleared, but only through the walk's
+settle horizon, so a write inside the last thirty seconds keeps its mark for the next run. A
+tenant the budget cut off, or whose walk threw, is marked again at the back of the line.
+
+**A mark can be lost, so the old rotation is kept as a sweep.** A mark is written before its
+transaction commits and never fails the write. Redis down, an eviction or a crash between the
+insert and the mark leaves a tenant unmarked. So the run sweeps every tenant when the
+`analytics:project:swept` key is missing, and sets it for an hour once a sweep reaches every tenant
+with no failure. A lost mark therefore costs at most an hour of delay, never a row. The run also
+sweeps when the marks cannot be read, and without ClickHouse nothing is marked at all. The
+completion line's `mode` says which kind of run it was: `marked` or `sweep`.
+
 **One tenant's failure does not stop the others.** It emits `analytics.projection.failed` and the walk
 moves on; the run still throws the first error once everyone else has had a turn, so BullMQ counts it
 failed. **Three failures in a row do stop it**, because that is the store and not the tenants: a dev

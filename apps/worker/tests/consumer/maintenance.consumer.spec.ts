@@ -1004,6 +1004,7 @@ describe("MaintenanceConsumer — the overrides and the node", () => {
     checksum: "sha-512",
     actionCounts: {},
     projectedAt: null,
+    heldUntil: null,
   });
 
   // `drop` destroys the month. Branching on the mode before reading the overrides meant
@@ -1051,6 +1052,38 @@ describe("MaintenanceConsumer — the overrides and the node", () => {
     );
 
     expect(placements).toEqual([SECOND]);
+  });
+
+  // `26.4`. A message month is restored to be read: outside the hot window it was left in
+  // a scratch table, and attached it would have been archived again that night.
+  it("attaches a restored message month wherever it falls, and holds it for thirty days", async () => {
+    const { container, partitionArchive, maintenance } = harness();
+    partitionArchive.stage([{ ...entry(SECOND), tableName: "messages" }]);
+
+    await consumerFor(container).handle(
+      job("cold-restore", { table: "messages", period: "2024-01-01", organizationId: null }),
+    );
+
+    expect(maintenance.attached().map((row) => row.table)).toEqual(["messages"]);
+    expect(
+      partitionArchive.holds().map((hold) => ({
+        table: hold.table,
+        organizationId: hold.organizationId,
+        until: hold.until.toISOString(),
+      })),
+    ).toEqual([{ table: "messages", organizationId: SECOND, until: "2026-09-14T00:00:00.000Z" }]);
+  });
+
+  it("leaves an old activity month in its scratch table, unheld", async () => {
+    const { container, partitionArchive, maintenance } = harness();
+    partitionArchive.stage([entry(SECOND)]);
+
+    await consumerFor(container).handle(
+      job("cold-restore", { table: "activity_log", period: "2024-01-01", organizationId: null }),
+    );
+
+    expect(maintenance.attached()).toEqual([]);
+    expect(partitionArchive.holds()).toEqual([]);
   });
 
   // An export reads live rows, so an unplaced one read node 0 and wrote a manifest

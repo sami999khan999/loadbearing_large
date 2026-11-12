@@ -16,7 +16,7 @@ description: The written rules, the arguments behind them, the build order, the 
 
 These pages (`explained/`) are listed in the guide's own index rather than here.
 
-This page covers 79 files.
+This page covers 103 files.
 
 ## Every file
 
@@ -101,6 +101,39 @@ This page covers 79 files.
 | `visibility.md` | Four independent reasons something is missing from a screen — a flag, an entitlement, a permission, a widget preference — the order they resolve in, and the one answer to "why is it gone". |
 | `vocabulary.md` | Permissions, procedures, events, queues, contract members, database objects, env vars, React. |
 
+### `docs/plans/`
+
+| File | What it does |
+|---|---|
+| `BACKLOG.md` | Every task not yet done, in one place, numbered by section. Most wait on hardware, real traffic or a trigger date. |
+| `index.md` | Contents page for the plans: what is live here, and that everything finished is in `archive/`. |
+| `meta.json` | Sidebar title, description and page order for this docs folder. |
+| `HANDOFF.md` | Where the last plan stopped and how to pick the work up on a new machine: setup steps, test accounts, how each phase was checked, and the traps that cost time. |
+
+### `docs/plans/archive/`
+
+| File | What it does |
+|---|---|
+| `AI-CHAT-PLAN.md` | Finished plan: the AI Assistant, asking OpenAI, OpenRouter or Gemini about data the reader may see, sized for 100K users. |
+| `ACCESS-AND-VISIBILITY-PLAN.md` | Finished plan: feature flags, plan-based entitlements, per-user permission overrides, account suspension, widgets and zones. |
+| `COMMUNICATION-PERFORMANCE-PLAN.md` | Finished plan: moving realtime, messaging, notifications and email off the web app's request path. |
+| `COMMUNICATION-PLAN.md` | Finished plan: mail, the outbox, notifications, realtime streams and messaging, built as one system. |
+| `COMMUNICATION.md` | An early note that deferred the whole communication feature set; superseded by the two plans above. |
+| `DB-SCALING-DEFERRED.md` | Database scaling work that was deliberately put off, and why. |
+| `DB-SCALING-PLAN.md` | Finished plan: connection pooling with pgBouncer, table partitioning by tenant and by month, and routing tenants to database nodes. |
+| `DONE.md` | Closed backlog items, each with the proof that it was fixed. |
+| `IMPLEMENTATION-PLAN.md` | The original plan that built the starter kit. |
+| `OPEN.md` | An older list of what was broken and what the main plan still left undone. |
+| `PLAN.md` | The whole project in build order, as it was tracked during the main build. |
+| `PLATFORM-ADMIN-PLAN.md` | Finished plan: the platform (super admin) tier, data retention, the analytics projection policy and the read-replica panel. |
+| `REVIEW-2026-09-25.md` | A code review from 2026-09-25: bugs, scaling limits, leaks and security issues found, ranked. |
+| `REVIEW.md` | An earlier full read of the code: every defect found, ranked. |
+| `STATE.md` | What one session changed on a developer machine, and how to undo it. |
+| `STUCK.md` | What could not be done on 2026-09-20, and exactly why. |
+| `WORKER-CONTROL-PLAN.md` | Finished plan: choosing a worker's queues at runtime, pausing queues and in-process autoscaling from the platform dashboard. |
+| `TODO.md` | The old task ledger, from before the backlog replaced it. |
+| `index.md` | Contents page for the archived plans. |
+| `meta.json` | Sidebar title, description and page order for this docs folder. |
 ### `docs/setup/`
 
 | File | What it does |

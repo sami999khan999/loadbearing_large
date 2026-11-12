@@ -41,6 +41,10 @@ export class RestorePartitionUseCase {
     this.authorizer.assert(actor, "platform.retention.manage");
 
     const table = RestorePartitionUseCase.assertKnownTable(input.tableName);
+    // The group is restored through `messages`, so its three tables come back together.
+    if (PartitionedTable.isDomainData(table) && table !== PartitionedTable.MESSAGES) {
+      throw new ValidationError([{ field: "tableName", rule: "group" }]);
+    }
     if (!PERIOD.test(input.period)) {
       throw new ValidationError([{ field: "period", rule: "format" }]);
     }
@@ -71,11 +75,15 @@ export class RestorePartitionUseCase {
 
     // The dedupe id is the request: a double click is one job, and a second request for
     // the same month while the first is running is the same job. After, a new one.
-    await this.queue.publish(
-      QueueName.MAINTENANCE,
-      { table, period: input.period, organizationId: input.organizationId ?? null },
-      { inFlightId: jobId, name: "cold-restore" },
-    );
+    // ──
+    // A message month comes back with its reactions and files, one job per table (`26.4`).
+    for (const member of PartitionedTable.groupOf(table)) {
+      await this.queue.publish(
+        QueueName.MAINTENANCE,
+        { table: member, period: input.period, organizationId: input.organizationId ?? null },
+        { inFlightId: jobId.replace(`.${table}.`, `.${member}.`), name: "cold-restore" },
+      );
+    }
 
     return { jobId, objects: entries.length };
   }

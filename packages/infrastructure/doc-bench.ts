@@ -1,5 +1,5 @@
 // `pnpm doc:bench`: seeds a public 2,000-page platform space and measures it against a
-// running web server. The budgets it is read against: docs/plans/DOCS-SYSTEM-PLAN.md `DS0.2`.
+// running web server. Its budgets are lite's `DS0.2`, and the run here is `LP.3`.
 
 import { gzipSync } from "node:zlib";
 import {
@@ -21,7 +21,7 @@ import { UnifiedMarkdownRenderer } from "./src/unified/index.js";
 
 const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_DIRECT_URL or DATABASE_URL is required.");
-const base = process.env.BENCH_URL ?? "http://localhost:23000";
+const base = process.env.BENCH_URL ?? "http://localhost:13000";
 
 const SLUG = "bench";
 const PAGES = 2_000;

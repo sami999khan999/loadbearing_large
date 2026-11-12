@@ -24,6 +24,7 @@ export interface ThreadPanelProps {
 interface ThreadPage {
   readonly items: readonly MessageDto[];
   readonly newerCursor: string | null;
+  readonly rootArchived?: boolean;
 }
 
 // One root's replies, oldest first, and a composer that answers it (`26.1`). One level:
@@ -38,10 +39,14 @@ export function ThreadPanel({ root, nameFor, mentionable }: ThreadPanelProps) {
     const pages: readonly ThreadPage[] = thread.data?.pages ?? [];
     return pages.flatMap((page) => page.items);
   }, [thread.data]);
+  // Annotated: the page type is reconstructed through three packages and can degrade.
+  const first: ThreadPage | undefined = thread.data?.pages[0];
+  const rootArchived = first?.rootArchived === true;
 
   return (
     <section className="ui-thread" aria-label={t("messaging.thread.title")}>
       {thread.isError ? <Callout tone="danger">{describe(thread.error)?.message}</Callout> : null}
+      {rootArchived ? <Callout tone="info">{t("messaging.thread.rootArchived")}</Callout> : null}
       <ol>
         {replies.map((reply) => (
           <li key={reply.id}>

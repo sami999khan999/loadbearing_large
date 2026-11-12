@@ -703,7 +703,9 @@ add exemptions rather than fix paths:
   package's `docs/reference/`" generically, so the span passes if any package has one.
 
 `apps/desktop` and `apps/api` are exempt by name. Both appear only in sentences about what *would*
-move there, and doc [30](30-desktop-app.md) is a plan for one of them.
+move there, and doc [30](30-desktop-app.md) is a plan for one of them. `docs/plans/` is exempt
+whole: a plan names files it is about to create, and an archived one names files since moved, and
+both are the record of what was believed then. §10 skips `docs/plans/archive/` for the same reason.
 
 **It resolves Markdown link targets as well, and that is the half a reader actually clicks.** A
 backticked path is prose about the tree; a `](…)` is a door. Nothing in CI could see one until
@@ -1197,7 +1199,7 @@ imposed here: the worker emits `"event":"process.started"` through its own logge
 
 **`web` was opted out, for a bug that has since been fixed.** The comment said the server bundle
 throws `jsxDEV is not a function`. That was `T-032`, fixed 2026-09-13 — and the comment also cited a
-TODO file under a *tasks/* directory that has never existed (it is [`plans/archive/TODO.md`](../../plans/archive/TODO.md)),
+TODO file under a *tasks/* directory that has never existed (it is [`docs/plans/archive/TODO.md`](../plans/archive/TODO.md)),
 and `T-034`, which is the dropped analytics-reader item. Three errors in four lines, which is what
 a comment nobody can run decays into.
 

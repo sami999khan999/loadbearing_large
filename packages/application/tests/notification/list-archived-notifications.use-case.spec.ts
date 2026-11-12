@@ -28,6 +28,7 @@ const entry = (organizationId: string): PartitionArchiveEntry =>
     checksum: "x",
     actionCounts: {},
     projectedAt: null,
+    heldUntil: null,
   }) as PartitionArchiveEntry;
 
 // Records what it was asked for. The tenant on the entry it returns is the whole point:

@@ -252,6 +252,32 @@ Two fixes moved the large-sidebar figure:
 - **Reader links are plain anchors.** One delegated listener (`useDocLinkNavigation`) routes a
   click and preloads on hover or focus. A router `<Link>` builds a location while it renders.
 
+**The figures above are lite's. The big kit's own, measured 2026-11-12** (`LP.3`) on the sharded
+profile with ClickHouse, one production web process (`WEB_PROCESSES=1`), a 12-core machine at
+load average 3 to 7 from other work:
+
+| Path | Req/s | p50 / p95 ms | Queries per request |
+|---|---|---|---|
+| Page read, cold | 29 | 738 / 961 | 1.36 |
+| Page read, warm | 33 | 617 / 876 | 0.07 |
+| The largest page | 15 | 645 / 967 | 0.23 |
+| Raw Markdown | 266 | 72 / 107 | 0.01 |
+
+Search was p50 32 ms and p95 46 ms. Render was p95 3 ms, max 464 ms. The full tree was 328 KB,
+48 KB gzipped. The page figures are for the 2,000-page space, whose sidebar holds 501 links, and
+sit beside lite's 39. The latencies are a closed loop's: queueing at its concurrency, not one
+request's cost. `pnpm bench` against the same process:
+
+| Path | Req/s at 10 / 50 | p95 ms at 10 / 50 |
+|---|---|---|
+| `/api/health` | 563 / 734 | 27 / 91 |
+| `/` | 351 / 327 | 68 / 266 |
+| `/sign-in` | 277 / 298 | 81 / 306 |
+| `/docs` | 245 / 382 | 81 / 229 |
+
+Both scripts now default to this kit's web port, 13000; they defaulted to lite's 23000. The
+production server listens on `PORT`, not `WEB_PORT`, so run it as `PORT=13000 pnpm start`.
+
 **The article's HTML is in the response once.** The hydration payload carries `html: ""` for a
 doc reading, and the browser reads the HTML back from the server's markup. That is
 `ArticleHtmlStore` in `apps/web`. It keeps what it read by page and revision, so going back to the

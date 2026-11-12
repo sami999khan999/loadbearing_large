@@ -7,6 +7,7 @@ export {
 } from "./redis-assistant-stream.subscriber.js";
 export { RedisCacheStore } from "./redis-cache.store.js";
 export { RedisPresenceReader } from "./redis-presence.reader.js";
+export { RedisProjectionBacklogStore } from "./redis-projection-backlog.store.js";
 export { RedisRateLimitStore } from "./redis-rate-limit.store.js";
 export { RedisRealtimePublisher } from "./redis-realtime.publisher.js";
 export {

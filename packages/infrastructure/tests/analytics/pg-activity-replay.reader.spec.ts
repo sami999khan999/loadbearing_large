@@ -1,4 +1,4 @@
-import { PartitionedTable } from "@loadbearing/application";
+import { PartitionedTable, ProjectionBacklogStore } from "@loadbearing/application";
 import { Uuid } from "@loadbearing/core";
 import type { Logger } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -234,5 +234,39 @@ describe("PgActivityReplayReader", () => {
     const from = new Date("2031-04-01T00:00:00.000Z");
     const to = new Date("2031-04-02T00:00:00.000Z");
     expect(await reader.dailyCounts(organization, from, to)).toEqual([]);
+  });
+});
+
+// `CR.20`. The projection walks only marked tenants between sweeps, so a row written
+// without a mark waits for the sweep. Marked after the insert, at the logger's clock.
+describe("PgActivityLogger and the projection backlog", () => {
+  class RecordingBacklog extends ProjectionBacklogStore {
+    public readonly marked: [OrganizationId, Date][] = [];
+    public override mark(organizationId: OrganizationId, at: Date): Promise<void> {
+      this.marked.push([organizationId, at]);
+      return Promise.resolve();
+    }
+    public override pending(): Promise<readonly OrganizationId[]> {
+      return Promise.resolve([]);
+    }
+    public override clear(): Promise<void> {
+      return Promise.resolve();
+    }
+  }
+
+  it("marks the tenant it wrote for", async () => {
+    const backlog = new RecordingBacklog();
+    const marking = new PgActivityLogger(
+      DatabaseCluster.single(database),
+      new TransactionScope(),
+      shards,
+      { now: () => INSTANT },
+      backlog,
+    );
+    const actor = { userId: Uuid.v7(), organizationId: organization, kind: "user" as const };
+
+    await marking.record(actor as never, "task.reactivated", { taskId: Uuid.v7() });
+
+    expect(backlog.marked).toEqual([[organization, INSTANT]]);
   });
 });

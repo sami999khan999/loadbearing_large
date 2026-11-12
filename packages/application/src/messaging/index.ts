@@ -38,6 +38,7 @@ export {
   type ThreadPageResult,
   type UnreadCount,
 } from "./message.repository.js";
+export { MessageArchive } from "./message-archive.js";
 export {
   type MessageAttachmentRecord,
   MessageAttachmentRepository,

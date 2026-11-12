@@ -8,6 +8,7 @@ import {
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
   InMemoryPresenceReader,
+  InMemoryProjectionBacklogStore,
   InMemoryRateLimitStore,
   InMemoryRealtimeHub,
   InMemoryRealtimeSubscriber,
@@ -65,6 +66,7 @@ import {
   type PartitionArchiveGateway,
   type PresenceReader,
   type Principal,
+  type ProjectionBacklogStore,
   type PushSender,
   type QueuePublisher,
   type RateLimitStore,
@@ -115,6 +117,7 @@ export interface TestPorts {
   readonly secretCipher: SecretCipher;
   readonly pushSender: PushSender;
   readonly presence: PresenceReader;
+  readonly projectionBacklog: ProjectionBacklogStore;
   readonly markdownRenderer: MarkdownRenderer;
   readonly maintenance: MaintenanceGateway;
   readonly organizations: OrganizationReader;
@@ -190,6 +193,7 @@ export class TestContainer {
       secretCipher: overrides.secretCipher ?? new StubSecretCipher(),
       pushSender: overrides.pushSender ?? new RecordingPushSender(),
       presence: overrides.presence ?? new InMemoryPresenceReader(),
+      projectionBacklog: overrides.projectionBacklog ?? new InMemoryProjectionBacklogStore(),
       markdownRenderer: overrides.markdownRenderer ?? new StubMarkdownRenderer(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       organizations: overrides.organizations ?? new InMemoryOrganizationReader(),

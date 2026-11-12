@@ -95,7 +95,7 @@ the count is a `LATERAL` per row of the conversation page, **capped at a hundred
 - **The cap bounds the worst case.** A channel nobody has opened in a year costs a hundred index
   entries, and the badge says "99+" — which is what a person reads anyway.
 - **So does a floor.** Only the last ninety days count, passed as a bound parameter so the planner
-  prunes every older month before it runs. `messages` is never retired, so without it every render
+  prunes every older month before it runs. `messages` is not retired by default, so without it every render
   of the conversation list read every month the tenant has ever had.
 
 **The first page of a room is bounded too.** `message.list` passes the conversation's
@@ -211,6 +211,31 @@ page: the keyset cursor is a row constructor, which the partition pruner does no
 conversation page still reads every month of that tenant. See
 [partitions](../../../infrastructure/docs/reference/partitions.md) for the measurements.
 Retention never drops a message: messages are domain data, so `retentionMonths` is `null`.
+
+## Old months may go to cold storage, and a conversation says so
+
+Decision D47 kept every message month in Postgres forever. `26.4` reopened it on 2026-11-12:
+a platform admin may set `messages`' hot months on the retention screen, and the nightly pass
+then archives older months to S3 the way it archives `activity_log`. Three rules keep that from
+ever losing what a person wrote:
+
+- **The three tables move as one.** `messages`, `message_reactions` and `message_attachments`
+  form `PartitionedTable.MESSAGE_GROUP`. One save on `messages` writes all three rows. A save or
+  a restore that names a sibling alone is refused (`rule: "group"`).
+- **Archived, never dropped or expired.** `cold_mode` must be `archive` and `cold_months` null
+  (`rule: "domainData"`), so the bucket never expires a message object.
+- **A restore puts the month back where it can be read.** Any other table's month restored
+  outside the hot window waits in a scratch table. A message month is attached wherever it
+  falls, and `partition_archive.held_until` keeps the pass from archiving it again for thirty
+  days. Archiving it after that clears the hold.
+
+The reader is told rather than shown a gap. `MessageArchive` reads the tenant's archived months
+from the catalog, outside any transaction, and leaves out held ones. The oldest page of a
+conversation carries `archivedThrough`, the newest cold month the conversation could have had
+messages in. The list shows "Messages up to that month are archived", and names a platform
+administrator as the person who can restore them. A thread whose root's month is cold answers
+`rootArchived` instead of `NOT_FOUND`. Restoring is a platform admin's act alone, as for every
+other table: no tenant permission can start one.
 
 ## The notification policy stops at direct conversations
 

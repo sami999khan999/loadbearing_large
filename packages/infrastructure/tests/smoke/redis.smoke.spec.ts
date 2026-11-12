@@ -2,10 +2,11 @@ import { RealtimeChannels } from "@loadbearing/application";
 import { Queue, Worker } from "bullmq";
 import { afterAll, describe, expect, inject, it } from "vitest";
 import { BullMqQueuePublisher } from "../../src/bullmq/index.js";
-import type { RealtimeMessage } from "../../src/import.js";
+import type { Logger, OrganizationId, RealtimeMessage } from "../../src/import.js";
 import {
   RedisCacheStore,
   RedisConnection,
+  RedisProjectionBacklogStore,
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
@@ -51,6 +52,36 @@ describe("RedisRateLimitStore against the running cache instance", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1_100));
     expect(await limits.hit(key, 1)).toBe(1);
+  });
+});
+
+// `CR.20`. `GT` and the compare-and-remove are Redis's to honour, so only the running
+// instance can show a later write surviving a clear through an earlier time.
+describe("RedisProjectionBacklogStore against the running cache instance", () => {
+  const ORG = "00000000-0000-7000-8000-0000000000b1" as OrganizationId;
+  const OTHER = "00000000-0000-7000-8000-0000000000b2" as OrganizationId;
+  const logger = { emit: () => undefined } as unknown as Logger;
+
+  afterAll(async () => {
+    await redis.client().zrem("analytics:backlog", ORG, OTHER);
+  });
+
+  it("keeps the latest mark, lists oldest first, and clears only through a time", async () => {
+    const backlog = new RedisProjectionBacklogStore(redis.client(), logger);
+
+    await backlog.mark(ORG, new Date(2_000));
+    await backlog.mark(ORG, new Date(1_000));
+    await backlog.mark(OTHER, new Date(1_500));
+    expect(await redis.client().zscore("analytics:backlog", ORG)).toBe("2000");
+    expect((await backlog.pending(1_000)).filter((id) => id === ORG || id === OTHER)).toEqual([
+      OTHER,
+      ORG,
+    ]);
+
+    await backlog.clear(ORG, new Date(1_999));
+    expect(await redis.client().zscore("analytics:backlog", ORG)).toBe("2000");
+    await backlog.clear(ORG, new Date(2_000));
+    expect(await redis.client().zscore("analytics:backlog", ORG)).toBeNull();
   });
 });
 

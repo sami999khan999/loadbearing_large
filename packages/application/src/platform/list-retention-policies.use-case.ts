@@ -22,6 +22,10 @@ export interface RetentionEntry {
   // `null` hot months means the calendar never retires this table — `messages`, which
   // is domain data. The screen renders it read-only rather than as a zero.
   readonly neverDropped: boolean;
+  // `26.4`: what a person wrote. Always archived, never dropped, never expired in cold.
+  readonly domainData: boolean;
+  // The table whose setting this one takes, or null when it is set on its own.
+  readonly follows: string | null;
 }
 
 export interface ClickHouseRetention {
@@ -115,6 +119,11 @@ export class ListRetentionPoliciesUseCase {
       coldMode: row?.coldMode ?? "archive",
       isDefault: row === undefined,
       neverDropped: entry.retentionMonths === null && row === undefined,
+      domainData: PartitionedTable.isDomainData(entry.name),
+      follows:
+        PartitionedTable.isDomainData(entry.name) && entry.name !== PartitionedTable.MESSAGES
+          ? PartitionedTable.MESSAGES
+          : null,
     };
   }
 }

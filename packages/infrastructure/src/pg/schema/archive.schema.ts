@@ -44,6 +44,9 @@ export const partitionArchive = pgTable(
     // When the tenant was deleted, not when the month was archived. The recovery
     // window runs from here — see docs/reference/cold-storage.md.
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // A restored message month is back in Postgres until this time, and the retention pass
+    // leaves it there (`26.4`). Null for every month that is only in cold storage.
+    heldUntil: timestamp("held_until", { withTimezone: true }),
   },
   (t) => [
     // Leading with the tenant is not cosmetic: it is what lets one tenant's cold months

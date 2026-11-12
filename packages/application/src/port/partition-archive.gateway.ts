@@ -88,6 +88,15 @@ export abstract class PartitionArchiveGateway {
     organizationId?: OrganizationId,
   ): Promise<ArchivedPartition>;
 
+  // Keeps a restored tenant-month in Postgres until `until`: `archive` passes it over, and
+  // archiving it again afterwards clears the hold (`26.4`).
+  public abstract hold(
+    table: PartitionedTableName,
+    period: Date,
+    organizationId: OrganizationId,
+    until: Date,
+  ): Promise<void>;
+
   // Months a cut-off `archive` left detached, attached again so they are readable and
   // archived on the next pass. Run before the months are listed. Returns their names.
   public abstract recover(table: PartitionedTableName): Promise<readonly string[]>;

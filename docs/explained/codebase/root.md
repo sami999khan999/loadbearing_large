@@ -11,9 +11,9 @@ The top of the repository holds no application code. It holds the settings every
 
 The two files to know first are `package.json`, whose scripts are the commands you type (`pnpm dev`, `pnpm test`, `pnpm db:migrate` and so on), and `.env.example`, the template for the one settings file every app and container reads.
 
-The big kit's Docker stack has more containers, most behind opt-in profiles: pgBouncer, two Redis instances, Loki and Alloy for logs, ClickHouse for analytics, a read replica, a second database node and a cold-storage bucket. `plans/` holds the backlog, the handoff note and every finished plan.
+The big kit's Docker stack has more containers, most behind opt-in profiles: pgBouncer, two Redis instances, Loki and Alloy for logs, ClickHouse for analytics, a read replica, a second database node and a cold-storage bucket. The backlog, the handoff note and every finished plan are in `docs/plans/`, described on the docs page.
 
-This page covers 48 files.
+This page covers 29 files.
 
 ## Every file
 
@@ -86,31 +86,3 @@ This page covers 48 files.
 |---|---|
 | `.gitkeep` | Keeps the empty `infra/logs/` folder in git. Piping `pnpm dev` output into a file there lets Alloy ship host-side logs too. |
 
-### `plans/`
-
-| File | What it does |
-|---|---|
-| `BACKLOG.md` | Every task not yet done, in one place, numbered by section. Section 17 holds what is left from bringing the docs system and platform organization over from the small kit. |
-| `HANDOFF.md` | Where the last plan stopped and how to pick the work up on a new machine: setup steps, test accounts, how each phase was checked, and the traps that cost time. |
-
-### `plans/archive/`
-
-| File | What it does |
-|---|---|
-| `ACCESS-AND-VISIBILITY-PLAN.md` | Finished plan: feature flags, plan-based entitlements, per-user permission overrides, account suspension, widgets and zones. |
-| `COMMUNICATION-PERFORMANCE-PLAN.md` | Finished plan: moving realtime, messaging, notifications and email off the web app's request path. |
-| `COMMUNICATION-PLAN.md` | Finished plan: mail, the outbox, notifications, realtime streams and messaging, built as one system. |
-| `COMMUNICATION.md` | An early note that deferred the whole communication feature set; superseded by the two plans above. |
-| `DB-SCALING-DEFERRED.md` | Database scaling work that was deliberately put off, and why. |
-| `DB-SCALING-PLAN.md` | Finished plan: connection pooling with pgBouncer, table partitioning by tenant and by month, and routing tenants to database nodes. |
-| `DONE.md` | Closed backlog items, each with the proof that it was fixed. |
-| `IMPLEMENTATION-PLAN.md` | The original plan that built the starter kit. |
-| `OPEN.md` | An older list of what was broken and what the main plan still left undone. |
-| `PLAN.md` | The whole project in build order, as it was tracked during the main build. |
-| `PLATFORM-ADMIN-PLAN.md` | Finished plan: the platform (super admin) tier, data retention, the analytics projection policy and the read-replica panel. |
-| `REVIEW-2026-09-25.md` | A code review from 2026-09-25: bugs, scaling limits, leaks and security issues found, ranked. |
-| `REVIEW.md` | An earlier full read of the code: every defect found, ranked. |
-| `STATE.md` | What one session changed on a developer machine, and how to undo it. |
-| `STUCK.md` | What could not be done on 2026-09-20, and exactly why. |
-| `TODO.md` | The old task ledger, from before the backlog replaced it. |
-| `index.md` | Contents page for the archived plans. |

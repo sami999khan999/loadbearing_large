@@ -1107,7 +1107,7 @@ Bodies in [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md), at the line each backl
 Twenty closed with the communication performance plan, pushed as `14d49db..45633e6` and listed
 in that plan's changelog; twenty-six more closed on 2026-09-26 in the per-layer commits after
 `e265714`, three of them the rest of what the plan had closed in part, and `CR.16` later that day.
-Two stay open in `BACKLOG.md` §10, narrowed to what is left of them: `CR.20` and `CR.33`.
+Two stayed open in `BACKLOG.md` §10, narrowed: `CR.33` closed 2026-10-10 and `CR.20` 2026-11-12.
 **Every proof below is a spec that runs in `pnpm test` or `pnpm smoke`**,
 unless it says otherwise.
 
@@ -1258,6 +1258,19 @@ unless it says otherwise.
   Old inline-text jobs are read for one release. Proof: `document.use-case.spec.ts` asserts the
   payload has no text and the bucket holds it; `index-queued-document.use-case.spec.ts` asserts the
   object goes after a success and stays after a throw. `6f197268..95777020`, `ef48f12d`.
+
+### 10.H Closed 2026-11-12
+
+- [x] `CR.20` **A caught-up tenant still cost the projection its round trips** `done: 2026-11-12`
+  — the activity logger and the usage repository mark the tenant in a Redis sorted set scored by
+  its latest write, and a run walks only the marked tenants, oldest first. A caught-up tenant is
+  cleared only through the walk's settle horizon, and one the budget cut off or whose walk threw
+  is marked again at the back. A lost mark is caught by a sweep of every tenant, run whenever
+  `analytics:project:swept` is missing and set for an hour once a sweep finishes. The completion
+  line says `mode: "marked" | "sweep"`. Proof: `analytics.consumer.spec.ts` walks only the marked
+  tenant, sweeps until a sweep finishes, keeps a mark inside the horizon and sweeps when the marks
+  cannot be read; `pg-activity-replay.reader.spec.ts` shows the logger marking; the Redis smoke
+  shows `GT` and the compare-and-remove. `cc4a654a..eb054352`.
 
 ---
 
@@ -1711,7 +1724,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 **Split on 2026-09-22.** This file had grown to eighty-four closed entries against nineteen open
 ones, and a ledger you scroll past four-fifths of to reach the work is one nobody opens. Every
-closed entry moved to [`archive/DONE.md`](archive/DONE.md) with its proof intact and its ID
+closed entry moved to [`archive/DONE.md`](DONE.md) with its proof intact and its ID
 unchanged, and the changelog went with them. What is left here is the work.
 
 **Every archived plan was checked and carries nothing of its own.** Every `[ ]` in
@@ -1739,7 +1752,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 **Every item on the 2026-09-24 list is done except one**, and that one is skipped with its reasons
 in its entry. Everything is committed on `dev` and **not pushed**. Build, typecheck, lint, all 29
 architecture assertions with none skipped, the full test suite and the smoke suite are green. What
-closed, each with its proof in [`archive/DONE.md`](archive/DONE.md):
+closed, each with its proof in [`archive/DONE.md`](DONE.md):
 
 | ID | What | Proof |
 |---|---|---|
@@ -1753,7 +1766,7 @@ closed, each with its proof in [`archive/DONE.md`](archive/DONE.md):
 
 **`23.14` and `23.21` closed later the same day, decided with the user.** Doing `23.14`
 end to end found a sign-up regression from `24.2a`, and that is fixed too — see
-[`archive/DONE.md`](archive/DONE.md) §1.
+[`archive/DONE.md`](DONE.md) §1.
 
 **What is left is not a session's to do.** `S.2` waits for real traffic. `S.3` waits for a node
 that is provisioned rather than a second container. Section 6 is triggers, none fired. The
@@ -1765,13 +1778,13 @@ whole-plan verification's reading pass was done on 2026-09-25 and is in section 
 
 **One box left of nineteen.** The three recommendations, the eight browser clauses and the eight
 found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
-[`archive/DONE.md`](archive/DONE.md) §1 with what each was measured against.
+[`archive/DONE.md`](DONE.md) §1 with what each was measured against.
 
 **Empty.** `23.14` closed on 2026-09-25, decided with the user — see
-[`archive/DONE.md`](archive/DONE.md) §1.
+[`archive/DONE.md`](DONE.md) §1.
 
 **`24.1`–`24.6` are built, and `24.7` waits on a relation count no node has reached** —
-[`archive/DONE.md`](archive/DONE.md) §1. A tenant can be moved, a move under load loses no
+[`archive/DONE.md`](DONE.md) §1. A tenant can be moved, a move under load loses no
 acknowledged write, a moved tenant's catalog audit rows reach its own node through the outbox, a
 job still writing after the settle is refused rather than landing on the source, and the
 projection reads from a standby once it has caught up.
@@ -1779,13 +1792,13 @@ projection reads from a standby once it has caught up.
 ### Phase 25 — The replica panel and the shard map 📁
 
 **Empty.** `25.1` and `25.2` closed with `24.3` on 2026-09-25, and `25.3` the same day —
-[`archive/DONE.md`](archive/DONE.md) §1.
+[`archive/DONE.md`](DONE.md) §1.
 
 ### §2 — the closing notes
 
 
 **Empty. All forty-five were fixed on 2026-09-20** and are in
-[`archive/DONE.md`](archive/DONE.md) §2, each with the proof and the specs written for it.
+[`archive/DONE.md`](DONE.md) §2, each with the proof and the specs written for it.
 
 Two are worth finding again without reading the whole list. `R.9` is the one defect that ships
 with **no unit test**, because `session.fn.ts` calls `createServerFn` at module scope and hangs
@@ -1830,7 +1843,7 @@ work `R.2` fixed. The file is 7 passed.
 Each of these sits under a `[x]` in `archive/PLAN.md` as an `unfinished:`, `concern:` or `corrected:` note.
 Re-checked against the tree on 2026-09-20; the ones that turned out to be resolved are listed at
 the end so nobody chases them. **None is open**: `16.12`, the last, closed with `PF.0` on
-2026-09-24 — [`archive/DONE.md`](archive/DONE.md) §4.
+2026-09-24 — [`archive/DONE.md`](DONE.md) §4.
 
 **Checked and already resolved**, so the notes in `archive/PLAN.md` and `archive/OPEN.md` are stale rather than
 open: `22.12`'s "the two unit-of-work instances are not bound per slice yet" —
@@ -1852,7 +1865,7 @@ setup step the 2026-09-20 walk had not taken; it moves her `loadbearing` members
 to `platform_admin`, which is the tier by construction.
 
 **Two accounts, four organizations, and every clause below the API actually called.** What each
-clause was measured against is in [`archive/DONE.md`](archive/DONE.md) §5; what the pass left
+clause was measured against is in [`archive/DONE.md`](DONE.md) §5; what the pass left
 behind is in the state table at the end of this file. Two findings are worth carrying here rather
 than burying in a tick, because the next walk needs them:
 
@@ -1867,25 +1880,25 @@ than burying in a tick, because the next walk needs them:
   the next walk files a defect against a button that works.
 
 **The whole-plan verification closed on 2026-09-25**, both halves — the command block and all 26
-Exit lines by hand. [`archive/DONE.md`](archive/DONE.md) §5 has what was found.
+Exit lines by hand. [`archive/DONE.md`](DONE.md) §5 has what was found.
 
 ### §7 and §8 — the closing notes
 
 
 **Empty.** `T-036` closed on 2026-09-25 with its "Done when" narrowed as decided, so Phase 26
 lives in [`COMMUNICATION.md`](COMMUNICATION.md) rather than on this row. `T-037` and `T-038`
-closed on 2026-09-21. All three are in [`archive/DONE.md`](archive/DONE.md) §7.
+closed on 2026-09-21. All three are in [`archive/DONE.md`](DONE.md) §7.
 
 
 **Empty.** All six closed on 2026-09-21 and 2026-09-22 —
-[`archive/DONE.md`](archive/DONE.md) §8. The last of them was never a doc edit at all: three
+[`archive/DONE.md`](DONE.md) §8. The last of them was never a doc edit at all: three
 copies of the `DATABASE_SHARD_<n>_URL` reader, which stay three copies and now run one algorithm,
 held together by assertion 29.
 
 ### §9 — the performance summary
 
 
-**Empty. All eight closed on 2026-09-24** and are in [`archive/DONE.md`](archive/DONE.md) §9, each
+**Empty. All eight closed on 2026-09-24** and are in [`archive/DONE.md`](DONE.md) §9, each
 with its before and after. The short version, at 2 000 tenants on one node:
 
 | | before | after |
@@ -1922,7 +1935,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 ## 21. Worker control — closed
 
-- [x] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](../WORKER-CONTROL-PLAN.md)** `done: 2026-10-10` —
+- [x] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md)** `done: 2026-10-10` —
   `WORKER_QUEUES` chooses a process's queues, and the platform **Workers** page shows every live
   process and queue. From it an admin pauses a queue everywhere, one process, or one queue on one
   process; moves queues between processes; and autoscales a queue's concurrency between a minimum
@@ -1959,7 +1972,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   404 after; `/assistant` and `/dashboard` stay 200. `/messages/<unknown id>` still answers 500,
   because its procedure says `FORBIDDEN` rather than `NOT_FOUND`: that is `AI.4`.
 
-- [x] `AI.1` **Build [`AI-CHAT-PLAN.md`](../AI-CHAT-PLAN.md) — the AI Assistant** `done: 2026-11-10`
+- [x] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant** `done: 2026-11-10`
   — every step of the plan is built: the model adapters, tables, use cases, Redis answer stream,
   transport and lane (2026-10-14 to 10-19), the client and UI (10-19), usage reporting (11-10)
   and the scale section with its load test (11-10). **Proof:** the full gates; the assistant
@@ -2033,10 +2046,102 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   refused, a fresh mention claimed her device's push and the worker logged no error, and
   unsubscribing removed the row. Not checked: a real browser receiving one.
 
+## 23. The browser walks and the benchmark, 2026-11-12
+
+Walked in headless Chromium over the DevTools protocol, the `HANDOFF.md` recipe, against
+`pnpm dev` on the sharded and analytics profiles, with `ASSISTANT_PROVIDER=fake` at 150 ms a
+chunk. Users alice (platform admin), bob (owner of "Bob") and carol (member there). What the walks
+found and did not fix is `BACKLOG.md` §23.
+
+- [x] `UI.1` **The UI stack, by hand** `done: 2026-11-12` — `/kitchen-sink` in all six themes,
+  light and dark; Midnight stays dark under a light preference. By keyboard: `Select` (arrows,
+  Home/End, typing, Escape returns focus, Enter picks), `Menu` the same, the popover (Escape
+  returns focus), `ThemeToggle` (arrows switch mode), `Dialog` (focus in, Tab trapped, Escape
+  back to the trigger) and `AlertDialog` (focus on Cancel). The command palette lives in the doc
+  reader and opens on Ctrl+K there. The dashboard's zones hid and showed a card with
+  `widget.dismissal` targeted at one organization, then put back. Messaging: a message sent by
+  Enter; the inbox row is a button. Retention and cold storage render. The reader in a Forest
+  space keeps Forest in its search palette. Found: `WK.1`, `WK.2`, `WK.4`, `WK.7`, and the
+  not-found, error and pending states all drew a check mark (`876fa6bd`).
+- [x] `DC.9` **The doc editing screens, by hand** `done: 2026-11-12` — as bob: a space created
+  with the owner audience on offer, a page added by Enter, autosave posting `docPage/save` two
+  seconds after the last key, Preview rendering a callout, an image uploaded by presigned POST to
+  MinIO, two publishes, Compare showing the diff and Restore putting revision 1 back. As alice: a
+  granted space, a grant to "Bob" that let bob read it (signed out: 404) and a revoke that took
+  it away. Found and fixed: an uploaded image was spliced at the caret, which sits at 0 after
+  Preview, so `# Welcome` became `![…](…)# Welcome` and lost its heading (`fc0d6151`); the
+  parent picker was labelled "Add", like the button, with "—" for the top level (`7a990cad`,
+  `ded58e6f`). Found: `WK.3`, `WK.5`, `WK.6`.
+- [x] `LP.1` **The platform organization, by hand** `done: 2026-11-12` — the platform menu lists
+  all ten pages plus Team, Roles and Docs; the role grid has its Platform administrator column;
+  Change role on Members moved carol to Guest after its confirm and back; the reader's sidebar in
+  a Plum space scrolls with the themed thin thumb; "Only me" is in the space form.
+- [x] `LP.3` **The benchmarks, here** `done: 2026-11-12` — `pnpm doc:bench` and `pnpm bench`
+  on the sharded profile, one production web process; the figures are in `doc.md`. Both scripts
+  defaulted to lite's port 23000 (`39287aa6`, `80e105ee`, `da8b45a3`).
+- [x] `AI.2` **The Assistant, by hand** `done: 2026-11-12` — asked by Enter, the answer streaming
+  under "Writing…"; Stop by keyboard left the partial answer marked "Stopped."; a reload
+  mid-answer resumed at the next word with nothing lost or repeated; a second tab listed a new
+  thread without reloading; delete asked first with focus on Cancel; Bengali throughout; the
+  usage meter for the owner and not for a member. A source lost since the answer was not walked,
+  because the fake model cites nothing; `assistant-thread.panel.spec.tsx` covers it. Found and
+  fixed: the rename field's label named no input and Enter did nothing (`6020e67c`); a rename or
+  delete never reached the other tab, because only a settled answer published
+  `assistant.changed` (`67567aae`, `3fd4e7a2`).
+
+### 23.B What the walks found, fixed 2026-11-12
+
+- [x] `WK.1` **Nobody could start a conversation in the browser** — `ConversationCreateForm`
+  on `/messages`, behind `messaging.conversation.create` and `member.read`: tick people, name it
+  or not; one person and no name is a direct message, anything else a group. Walked: bob started
+  "Walk group" with carol by Enter and landed in it. `conversation-create.form.spec.tsx`.
+  `486f4507`, `b8aaf201`, `f18b4cb0`.
+- [x] `WK.2` **The React and Mention pickers drew empty boxes** — `Select` takes a
+  `placeholder`, shown muted while nothing is chosen. `select.spec.tsx`. `718592db`,
+  `2b5d6859`.
+- [x] `WK.3` **The editor never said a draft saved** — a polite status line reads "Saving…" then
+  "Draft saved.", cleared by the next edit or a publish. Walked. `doc-editor.form.spec.tsx`.
+  `0af8dd19`.
+- [x] `WK.4` **Retention showed an error on an untouched form** — a blank value previews
+  nothing, and an empty bucket gets its own sentence instead of "—".
+  `retention-preview.notice.spec.tsx`. `486f4507`, `a3cfc9e7`.
+- [x] `WK.5` **Revoking a grant dropped focus** — it moves to the panel's heading.
+  `doc-grant.panel.spec.tsx`. `6edd4fec`.
+- [x] `WK.6` **A grant's reason did not say it was required** — the hint starts "Required." and
+  target and reason carry `required`. `doc-grant.panel.spec.tsx`. `486f4507`, `6edd4fec`.
+- [x] `WK.7` **The app shell had no layout** — decided with the owner 2026-11-12: the signed-in
+  pages sit in `AppLayout`, the module nav and account links in the `Sidebar` (a drawer below
+  64rem), the organization switcher at its head, locale and sign-out at its foot, the bell in a
+  top bar. The logo is a mask painted with `--fg`; an `<img>`'s `currentColor` drew it black.
+  Walked: the current page is marked, the drawer traps focus, Escape returns it to the menu
+  button, and a link closes the drawer. `app-layout.spec.tsx`. `48e1e311..54b269f8`.
+
+
+### 23.C Decided with the owner, built 2026-11-12
+
+- [x] `26.4` **Old message months archived to cold storage** — **supersedes D47.** The owner
+  reopened it: a platform admin may set `messages`' hot months, and the nightly pass archives
+  older months with their reactions and files (`PartitionedTable.MESSAGE_GROUP`), always
+  archived, never dropped and never expired in cold. A restore is a platform admin's alone; it
+  brings the group back, attaches the month wherever it falls and holds it for thirty days
+  (`partition_archive.held_until`, migration `0068`). The oldest page of a conversation names
+  the newest cold month (`archivedThrough`); a thread whose root is cold says so
+  (`rootArchived`). There is no message search to annotate. Proof:
+  `retention-policy.use-case.spec`, `restore-partition.use-case.spec`, `message-archive.spec`,
+  `maintenance.consumer.spec`, the hold against Postgres in `pg-partition-archive.gateway.spec`,
+  and `conversation-names.spec`; walked: the retention screen offers hot months on `messages`
+  only, its siblings say they follow it, and one save wrote all three rows. `25648757..acde8f7f`.
+
+---
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **`26.4` built, superseding D47:** message months may go to cold storage as one group, never dropped, restored and held by a platform admin; the conversation says what is archived. And `WK.7`, the sidebar shell |
+| 2026-11-12 | @sami | **`WK.1`–`WK.6` closed:** starting a conversation, picker placeholders, the saved line, retention's untouched form, grant focus and the required reason. `WK.7` waits on a decision |
+| 2026-11-12 | @sami | **The browser walks and the benchmark:** `UI.1`, `DC.9`, `LP.1`, `LP.3` and `AI.2` closed, five fixes on the way and seven findings opened as `WK.1`–`WK.7` |
+| 2026-11-12 | @sami | **`CR.20` closed, and section 10 with it:** the projection walks only tenants with new rows, with an hourly sweep for a lost mark |
 | 2026-11-12 | @sami | **`26.3` closed:** web push, a third channel |
 | 2026-11-12 | @sami | **`26.1` closed:** threads, the last of it |
 | 2026-11-11 | @sami | **`26.7` closed:** channel mentions, the last of it |

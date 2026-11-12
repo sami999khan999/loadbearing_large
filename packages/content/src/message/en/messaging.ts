@@ -14,6 +14,10 @@ export const messaging = {
   "messaging.conversation.empty": "No messages yet. Say something.",
   "messaging.conversation.error": "This conversation could not be loaded.",
   "messaging.conversation.loadOlder": "Load older messages",
+  "messaging.conversation.archived":
+    "Messages up to {month} are archived. A platform administrator can restore them.",
+  "messaging.thread.rootArchived":
+    "The start of this thread is archived. A platform administrator can restore it.",
   "messaging.conversation.deleted": "This message was deleted.",
   "messaging.conversation.edited": "edited",
   "messaging.conversation.leave": "Leave conversation",
@@ -31,6 +35,9 @@ export const messaging = {
   "messaging.create.submit": "Start",
   "messaging.create.name": "Name",
   "messaging.create.people": "People",
+  "messaging.create.hint":
+    "One person and no name starts a direct message; a name or more people make a group.",
+  "messaging.create.nobody": "Nobody else is in this organization yet.",
 
   "messaging.typing.one": "{name} is typing…",
   "messaging.typing.many": "Several people are typing…",
