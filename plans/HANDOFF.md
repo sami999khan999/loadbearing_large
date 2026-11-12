@@ -17,10 +17,10 @@ machine setup, test data, how each phase was checked, and the traps that cost ti
   `UI.1`, `DC.9`, `LP.1`, `AI.2` and the benchmark `LP.3`. Before that, on 2026-11-10 to 12, the
   messaging features `26.1`, `26.3`, `26.6`, `26.7`, `26.10` and `26.11`, `RV.3` and the
   assistant's `AI.1`, `AI.3` and `AI.4`.
-- **What is open is [`BACKLOG.md`](BACKLOG.md).** Section 23 is the next work: seven findings
-  from the walks, `WK.1` (no way to start a conversation) the largest. The rest waits on
-  hardware, traffic, a trigger or a decision.
-- **`check:architecture` is 32/32.** `pnpm test` runs 2,606 tests and `pnpm smoke` 55.
+- **What is open is [`BACKLOG.md`](BACKLOG.md).** The walks' findings `WK.1`–`WK.6` were fixed
+  the same day; `WK.7`, a styled app shell, is a decision. The rest waits on hardware, traffic,
+  a trigger or a decision.
+- **`check:architecture` is 32/32.** `pnpm test` runs 2,615 tests and `pnpm smoke` 55.
 - The access and visibility plan, built 2026-09-28 to 30, is archived in
   [`ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md).
 
@@ -193,10 +193,7 @@ navigate, `Runtime.evaluate` with `replMode: true` for top-level `await`, `Input
 
 ## What is next
 
-1. **`BACKLOG.md` §23**, in order of size: `WK.1` (a create-conversation form, from
-   `MessagingMutations.useCreateConversation` and the `messaging.create.*` copy), then the six
-   small ones. `WK.7` is a decision first: whether the kit ships a styled app shell.
-2. **Port to lite** what it shares of §23 when each lands.
+1. **`WK.7`**, once decided: whether the app shell gets a layout.
 
 The rest of `BACKLOG.md` waits on hardware, traffic or a trigger: `AX11.2` before 2027-03-31,
 `S.2`, `S.3`, `24.7`, `26.4`, `26.8`.

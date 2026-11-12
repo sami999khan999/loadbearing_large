@@ -2089,12 +2089,35 @@ found and did not fix is `BACKLOG.md` §23.
   delete never reached the other tab, because only a settled answer published
   `assistant.changed` (`67567aae`, `3fd4e7a2`).
 
+### 23.B What the walks found, fixed 2026-11-12
+
+- [x] `WK.1` **Nobody could start a conversation in the browser** — `ConversationCreateForm`
+  on `/messages`, behind `messaging.conversation.create` and `member.read`: tick people, name it
+  or not; one person and no name is a direct message, anything else a group. Walked: bob started
+  "Walk group" with carol by Enter and landed in it. `conversation-create.form.spec.tsx`.
+  `486f4507`, `b8aaf201`, `f18b4cb0`.
+- [x] `WK.2` **The React and Mention pickers drew empty boxes** — `Select` takes a
+  `placeholder`, shown muted while nothing is chosen. `select.spec.tsx`. `718592db`,
+  `2b5d6859`.
+- [x] `WK.3` **The editor never said a draft saved** — a polite status line reads "Saving…" then
+  "Draft saved.", cleared by the next edit or a publish. Walked. `doc-editor.form.spec.tsx`.
+  `0af8dd19`.
+- [x] `WK.4` **Retention showed an error on an untouched form** — a blank value previews
+  nothing, and an empty bucket gets its own sentence instead of "—".
+  `retention-preview.notice.spec.tsx`. `486f4507`, `a3cfc9e7`.
+- [x] `WK.5` **Revoking a grant dropped focus** — it moves to the panel's heading.
+  `doc-grant.panel.spec.tsx`. `6edd4fec`.
+- [x] `WK.6` **A grant's reason did not say it was required** — the hint starts "Required." and
+  target and reason carry `required`. `doc-grant.panel.spec.tsx`. `486f4507`, `6edd4fec`.
+
+
 ---
 
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **`WK.1`–`WK.6` closed:** starting a conversation, picker placeholders, the saved line, retention's untouched form, grant focus and the required reason. `WK.7` waits on a decision |
 | 2026-11-12 | @sami | **The browser walks and the benchmark:** `UI.1`, `DC.9`, `LP.1`, `LP.3` and `AI.2` closed, five fixes on the way and seven findings opened as `WK.1`–`WK.7` |
 | 2026-11-12 | @sami | **`CR.20` closed, and section 10 with it:** the projection walks only tenants with new rows, with an hourly sweep for a lost mark |
 | 2026-11-12 | @sami | **`26.3` closed:** web push, a third channel |
