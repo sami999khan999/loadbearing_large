@@ -275,7 +275,10 @@ export interface EventShape {
     // True when the run stopped at its batch ceiling rather than because it caught up —
     // which separates "behind and closing" from "behind every run for a week".
     readonly capped: boolean;
+    // `marked` walked only tenants with new rows; `sweep` walked every tenant (`CR.20`).
+    readonly mode: "marked" | "sweep";
   };
+  readonly "analytics.backlog.unmarked": { readonly organizationId: string };
   readonly "analytics.projection.failed": {
     readonly projection: string;
     // Whose walk failed. The checkpoint is per tenant, so there is no global "where the
