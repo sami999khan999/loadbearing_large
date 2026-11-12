@@ -21,6 +21,15 @@ interface ReprojectJob {
   readonly organizationId: OrganizationId | null;
 }
 
+// One tenant's walk. `caughtUp` with `until` is what lets the run clear its backlog mark.
+interface TenantOutcome {
+  readonly projected: number;
+  readonly batches: number;
+  readonly lagMs: number;
+  readonly caughtUp: boolean;
+  readonly until: Date;
+}
+
 // What makes ClickHouse derived rather than authoritative: `project` moves the rows and
 // `reconcile` notices when it has not. See docs/reference/consumers.md.
 export class AnalyticsConsumer {
@@ -60,6 +69,15 @@ export class AnalyticsConsumer {
   // Consecutive tenant failures after which the run stops. The cursor still advances, so
   // a tenant that alone keeps failing is passed on the next run rather than retried first.
   private static readonly FAILURES_BEFORE_STOPPING = 3;
+
+  // Marked tenants read per run. Each costs no batch once caught up, so this bounds round
+  // trips, not rows; any past it wait their turn, oldest mark first.
+  private static readonly PENDING_LIMIT = 1_000;
+
+  // Set when a sweep of every tenant finishes, and a run walks only marked tenants while it
+  // holds. An hour is how long a lost mark can leave a tenant behind.
+  private static readonly SWEPT_KEY = "analytics:project:swept";
+  private static readonly SWEEP_EVERY_SECONDS = 60 * 60;
 
   public constructor(
     private readonly container: Container,
@@ -196,15 +214,29 @@ export class AnalyticsConsumer {
     let failingInARow = 0;
     let failure: Error | null = null;
     let last: OrganizationId | null = null;
+    let finished = true;
 
-    // From where the last run stopped, wrapping round: first come, first served let one
+    // Only the tenants with new rows, unless a sweep is due or the marks cannot be read:
+    // a caught-up tenant cost every run its round trips, so a run was O(tenants) (`CR.20`).
+    const backlog = this.container.projectionBacklog;
+    const marked = await this.markedTenants();
+    const mode = marked === null ? "sweep" : "marked";
+
+    // From where the last sweep stopped, wrapping round: first come, first served let one
     // tenant early in id order spend every run's budget before anyone after it (`CR.20`).
-    const start = await this.container.cache
-      .get<OrganizationId>(AnalyticsConsumer.CURSOR_KEY)
-      .catch(() => null);
+    const start =
+      marked === null
+        ? await this.container.cache
+            .get<OrganizationId>(AnalyticsConsumer.CURSOR_KEY)
+            .catch(() => null)
+        : null;
+    const walk = marked ?? this.rotation(start);
 
-    for await (const organizationId of this.rotation(start)) {
-      if (batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN) break;
+    for await (const organizationId of walk) {
+      if (batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN) {
+        finished = false;
+        break;
+      }
       tenants += 1;
       last = organizationId;
 
@@ -224,24 +256,42 @@ export class AnalyticsConsumer {
         // Three in a row is the store, not the tenants: an unreachable ClickHouse wrote a
         // failure line for every tenant every five minutes until the run stopped here.
         failingInARow += 1;
-        if (failingInARow >= AnalyticsConsumer.FAILURES_BEFORE_STOPPING) break;
+        // To the back of the line, so a tenant that keeps failing is not first every run.
+        await backlog?.mark(organizationId, this.container.clock.now());
+        if (failingInARow >= AnalyticsConsumer.FAILURES_BEFORE_STOPPING) {
+          finished = false;
+          break;
+        }
         continue;
       }
       failingInARow = 0;
       if (outcome === null) {
         skipped += 1;
+        await backlog?.clear(organizationId, this.container.clock.now()).catch(() => undefined);
         continue;
       }
       projected += outcome.projected;
       batches += outcome.batches;
+      // Cleared only through the walk's horizon: a write inside it keeps the mark for later.
+      if (outcome.caughtUp) {
+        await backlog?.clear(organizationId, outcome.until).catch(() => undefined);
+      } else {
+        await backlog?.mark(organizationId, this.container.clock.now());
+      }
       // The max over tenants, not the last one's: the run is as far behind as its
       // furthest-behind tenant.
       lagMs = Math.max(lagMs, outcome.lagMs);
     }
 
-    if (last !== null) {
+    if (mode === "sweep" && last !== null) {
       await this.container.cache
         .set(AnalyticsConsumer.CURSOR_KEY, last, AnalyticsConsumer.CURSOR_TTL_SECONDS)
+        .catch(() => undefined);
+    }
+    // Only a sweep that reached every tenant counts: one cut short goes on next run.
+    if (mode === "sweep" && finished && failed === 0 && backlog !== undefined) {
+      await this.container.cache
+        .set(AnalyticsConsumer.SWEPT_KEY, true, AnalyticsConsumer.SWEEP_EVERY_SECONDS)
         .catch(() => undefined);
     }
 
@@ -257,6 +307,7 @@ export class AnalyticsConsumer {
       skipped,
       failed,
       capped: batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN,
+      mode,
     });
 
     // `warn`, not `debug`: a projection that throws is already an error line, and one
@@ -271,6 +322,18 @@ export class AnalyticsConsumer {
 
     // After every other tenant has had its turn, so BullMQ still sees the run fail.
     if (failure !== null) throw failure;
+  }
+
+  // The marked tenants, or `null` for a sweep: none was ever marked without one first, a
+  // sweep is due, or the store cannot be asked. Without a backlog every run is a sweep.
+  private async markedTenants(): Promise<readonly OrganizationId[] | null> {
+    const backlog = this.container.projectionBacklog;
+    if (backlog === undefined) return null;
+    const swept = await this.container.cache
+      .get<boolean>(AnalyticsConsumer.SWEPT_KEY)
+      .catch(() => null);
+    if (swept === null) return null;
+    return backlog.pending(AnalyticsConsumer.PENDING_LIMIT).catch(() => null);
   }
 
   // Every tenant once, starting after `start` and wrapping round to it. Pages from the
@@ -313,7 +376,7 @@ export class AnalyticsConsumer {
     budget: number,
     excluding: readonly ActivityAction[],
     replica: boolean,
-  ): Promise<{ projected: number; batches: number; lagMs: number } | null> {
+  ): Promise<TenantOutcome | null> {
     try {
       // Inside the guard, so a tenant with no `shard_assignments` row still logs its failure.
       // Per tenant, not per node: reads hit the routed `activity_log`, writes one ClickHouse.
@@ -360,7 +423,7 @@ export class AnalyticsConsumer {
     organizationId: OrganizationId,
     budget: number,
     excluding: readonly ActivityAction[],
-  ): Promise<{ projected: number; batches: number; lagMs: number }> {
+  ): Promise<TenantOutcome> {
     const projector = this.container.projector;
     // The settle horizon for this tenant's whole walk, taken once. `occurred_at` is
     // stamped at write and rows commit out of that order. See docs/reference/consumers.md.
@@ -400,7 +463,13 @@ export class AnalyticsConsumer {
 
     const lagMs = await this.lagMs(organizationId, checkpoint, caughtUp, excluding, until);
     const usage = await this.projectUsage(organizationId, budget - batches, until);
-    return { projected: projected + usage.projected, batches: batches + usage.batches, lagMs };
+    return {
+      projected: projected + usage.projected,
+      batches: batches + usage.batches,
+      lagMs,
+      caughtUp: caughtUp && usage.caughtUp,
+      until,
+    };
   }
 
   // The assistant's meter, walked the same way and inside the same shard scope, from what
@@ -409,11 +478,12 @@ export class AnalyticsConsumer {
     organizationId: OrganizationId,
     budget: number,
     until: Date,
-  ): Promise<{ projected: number; batches: number }> {
+  ): Promise<{ projected: number; batches: number; caughtUp: boolean }> {
     const projector = this.container.usageProjector;
     let checkpoint = await projector.checkpoint(organizationId);
     let projected = 0;
     let batches = 0;
+    let caughtUp = false;
 
     while (batches < budget) {
       const records = await this.container.assistantUsageRecords.since(
@@ -423,15 +493,21 @@ export class AnalyticsConsumer {
         until,
       );
       const last = records.at(-1);
-      if (!last) break;
+      if (!last) {
+        caughtUp = true;
+        break;
+      }
 
       projected += await projector.project(records);
       batches += 1;
       checkpoint = { lastOccurredAt: last.createdAt, lastId: last.id };
-      if (records.length < AnalyticsConsumer.BATCH_SIZE) break;
+      if (records.length < AnalyticsConsumer.BATCH_SIZE) {
+        caughtUp = true;
+        break;
+      }
     }
 
-    return { projected, batches };
+    return { projected, batches, caughtUp };
   }
 
   // The age of the oldest row still unprojected, never the age of the newest projected

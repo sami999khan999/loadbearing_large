@@ -9,6 +9,7 @@ import {
   InMemoryColdArchiveReader,
   InMemoryOrganizationReader,
   InMemoryPlatformPolicyRepository,
+  InMemoryProjectionBacklogStore,
   InMemoryProjectionPolicyRepository,
   RecordingPartitionArchiveGateway,
   TestContainer,
@@ -679,6 +680,95 @@ describe("AnalyticsConsumer — where a run starts", () => {
 
   it("starts at the first tenant when there is no cursor", async () => {
     const { consumer, visited } = rotating();
+
+    await consumer.handle(job("project"));
+
+    expect(visited).toEqual([FIRST, SECOND, THIRD]);
+  });
+});
+
+// `CR.20`. A caught-up tenant cost every run its round trips, so a run was O(tenants). Now a
+// run walks the tenants a write marked, and sweeps everyone once an hour for a lost mark.
+describe("AnalyticsConsumer — only the tenants with new rows", () => {
+  const FIRST = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000001");
+  const SECOND = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000002");
+  const THIRD = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000003");
+  const SWEPT = "analytics:project:swept";
+
+  function marking() {
+    const visited: string[] = [];
+    const cache = new InMemoryCacheStore();
+    const backlog = new InMemoryProjectionBacklogStore();
+    const logger = { emit: vi.fn(), failure: vi.fn() };
+    const analyticsProjector = new InMemoryAnalyticsProjector();
+
+    const container = {
+      ...TestContainer.build({
+        activityReplay: new InMemoryActivityReplayReader([]),
+        analyticsProjector,
+        cache,
+        organizations: new InMemoryOrganizationReader([FIRST, SECOND, THIRD]),
+      }),
+      projector: analyticsProjector,
+      ...usageOf(),
+      projectionBacklog: backlog,
+      platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger,
+      placed: <T>(principal: { organizationId: string }, work: () => Promise<T>) => {
+        visited.push(principal.organizationId);
+        return work();
+      },
+    } as unknown as Container;
+
+    const consumer = new AnalyticsConsumer(container, undefined as never, 1);
+    return { consumer, cache, backlog, visited, logger };
+  }
+
+  it("walks only the marked tenants once a sweep has run, and clears their marks", async () => {
+    const { consumer, cache, backlog, visited, logger } = marking();
+    await cache.set(SWEPT, true, 60);
+    await backlog.mark(SECOND, minutesBefore(10));
+
+    await consumer.handle(job("project"));
+
+    expect(visited).toEqual([SECOND]);
+    expect(backlog.marks.size).toBe(0);
+    expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({
+      tenants: 1,
+      mode: "marked",
+    });
+  });
+
+  it("sweeps every tenant until a sweep has finished, then walks nobody unmarked", async () => {
+    const { consumer, cache, visited } = marking();
+
+    await consumer.handle(job("project"));
+    expect(visited).toEqual([FIRST, SECOND, THIRD]);
+    expect(await cache.get(SWEPT)).toBe(true);
+
+    visited.length = 0;
+    await consumer.handle(job("project"));
+    expect(visited).toEqual([]);
+  });
+
+  // The walk stops thirty seconds behind the clock, so a row written inside that window
+  // is not projected yet, and clearing its mark would leave it to the next sweep.
+  it("keeps a mark written inside the settle horizon", async () => {
+    const { consumer, cache, backlog } = marking();
+    await cache.set(SWEPT, true, 60);
+    await backlog.mark(FIRST, NOW);
+
+    await consumer.handle(job("project"));
+
+    expect(backlog.marks.has(FIRST)).toBe(true);
+  });
+
+  it("sweeps when the marks cannot be read, rather than walking nobody", async () => {
+    const { consumer, cache, backlog, visited } = marking();
+    await cache.set(SWEPT, true, 60);
+    backlog.failing = true;
 
     await consumer.handle(job("project"));
 
