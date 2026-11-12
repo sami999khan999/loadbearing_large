@@ -32,23 +32,19 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 2 | 7 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
-| 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 1 | 8 |
-| 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
-| 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 0 | 23 |
-| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 1 | 4 |
+| 23 | Found walking the big kit in a browser, 2026-11-12 | 7 | 5 |
 
-Sections 2, 4, 5, 7, 8, 9, 10, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
+Sections 2, 4, 5, 7, 8, 9, 10, 12, 15, 16, 17, 18, 20, 21 and 22 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
-check's 17, `WC.1` and all forty-nine of the 2026-09-25 review. Their entries are in `archive/DONE.md` under the same numbers.
+check's 17, `WC.1`, all forty-nine of the 2026-09-25 review, and the hand walks and benchmark that
+closed 15, 16, 17 and 22. Their entries are in `archive/DONE.md`, the walks under §23.
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
-**Section 11 is the next work**: the
-communication features, which waited on the performance plan and are built on top of it now.
-**Sections 13 to 17 are down to a trigger, hand walks, a benchmark and one deferred design**
-(`RV.3`); the rest of each closed on 2026-10-10 and is in `archive/DONE.md`. **Section 19**
-holds what the 2026-10-10 review found and did not fix.
+**Section 11 is down to two that need a decision or hardware**: `26.4` reopens D47, and `26.8`
+needs a machine that holds 250 000 users. **Section 13 is a trigger**, `AX11.2`. **Section 23 is
+the next work**: seven things the 2026-11-12 browser walk found, `WK.1` the largest.
 
 ---
 
@@ -154,69 +150,6 @@ before its first box was ticked. They are in [`archive/DONE.md`](archive/DONE.md
 
 ---
 
-## 15. The docs capability — what is left
-
-Built 2026-09-30: public, granted and organization docs as one slice, with a Fumadocs-style
-reader, drafts and revisions, search, images and the `graphite` theme. The reasoning is in
-[`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) and
-[`packages/infrastructure/docs/reference/doc-renderer.md`](../packages/infrastructure/docs/reference/doc-renderer.md).
-IDs are `DC.<n>`, new, and each body is here because no archived plan holds it. `DC.3` and
-`DC.8` came built with §17's port from lite; `DC.1` and `DC.4`–`DC.7` were built 2026-10-10, and
-`DC.2` on 2026-10-14. All eight are in [`archive/DONE.md`](archive/DONE.md) §15.
-
-### Not checked
-
-- [ ] `DC.9` **The editing screens have not been walked by hand.** `/doc/manage`, a space's page
-  tree, the editor with autosave, preview, image upload and restore, and the grant panel are
-  covered by specs and typecheck but were never driven in a browser, because that needs a signed-in
-  user. The reader, search, theme switching, the 404s for private spaces and the cache headers were.
-  **Walk it** with the `HANDOFF.md` recipe: alice as platform admin with the platform organization
-  active, then bob in his own organization.
-
----
-
-## 16. The UI stack from lite — what is left
-
-Ported 2026-10-01 from lite (`loadbearing_mini`, commits `192c27d..86d6637`, with the CI fixes
-`b4263aa`, `2890e0b`, `295014e`, `192c27d` and `24f8a04`). `packages/ui` styles every component
-with Tailwind utilities through `cn`, takes its behaviour from Base UI, and is grouped into
-`component/`, `theme/` and `style/`. The reasoning is in
-[`packages/ui/docs/index.md`](../packages/ui/docs/index.md). IDs are `UI.<n>`, new.
-
-- [ ] `UI.1` **Not walked by hand.** Specs, typecheck and `check:contrast` pass, but no browser
-  has looked. **Walk** `/kitchen-sink` in all six themes, light and dark; the keyboard on `Select`,
-  `Menu`, the popover, the command palette, `ThemeToggle`, `Dialog` and `AlertDialog`; the widget
-  dashboard and its zones; the messaging screens; the platform retention and restore panels; and
-  the doc reader in a space with its own theme, whose popovers must keep that theme.
-
-## 17. Lite's docs system and the platform organization — what is left
-
-Ported 2026-10-03 from lite (`loadbearing_mini`), as `cdb88c15..3f5bcf1b`, 28 commits each ending
-", from lite". The docs half is lite's `6dad856..8955fbb`: the owner audience, one process per
-core, large-space reads, access links, grouped search, reading aids, doc blocks, the repository
-link and Open in AI, renderer fixes, one React in the SSR build, HTML sent once and glass-scroll.
-The platform half is lite's `3046dc6..5468d6a`: `platform_admin` holds the whole catalog, so the
-platform organization is run like any other, behind the guards in
-[`platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md). Lite's migrations
-`0001` and `0003` are `0052` and `0053` here. IDs are `LP.<n>`, new.
-
-**Where the big kit differs.** `PLATFORM_ROUTE_PERMISSION` and the platform menu name all eight
-pages, retention, analytics, cold storage and shards included, and every page's guard reads its key
-from the table. `QueueName` joined `infrastructure`'s import surface for `doc-rerender.ts`.
-
-**Checked by hand through the API, 2026-10-03.** As the platform admin: create a role, grant it
-`doc.*` keys, invite a member into it. As that member: write, publish and delete a platform page;
-refused the status page, invites and opening a space. Moved to `member`, the same person loses
-doc writes. The last platform admin cannot demote themselves. An outsider gets `NOT_FOUND` on
-another organization's space. Server-rendered, `/platform` forwards to its first page, the menu
-lists all eight pages plus Team, Roles and Docs, and the reader renders blocks.
-
-- [ ] `LP.1` **Not walked in a browser.** **Walk** the platform menu, Change role on Members, the
-  role grid's platform column, the reader's sidebar scrollbar inside a themed space, and the
-  owner audience in the space form.
-- [ ] `LP.3` **`pnpm doc:bench` and `pnpm bench` not run here.** The figures in `doc.md` are
-  lite's, from one node. **Measure** on the sharded profile before quoting them.
-
 ## 19. Review of 2026-10-10 — what is left
 
 Two reviewers read the code both kits share after the 2026-10-10 fixes. One finding was false
@@ -224,11 +157,35 @@ Two reviewers read the code both kits share after the 2026-10-10 fixes. One find
 mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
 [`archive/DONE.md`](archive/DONE.md) §19, and lite has each shared one too. One is left.
 
-## 22. AI assistant — all but the browser walk closed
 
-- [ ] `AI.2` **Walk the Assistant in a browser.** Send, stream, Stop, reload mid-answer, two tabs
-  (the second refreshes on `assistant.changed`), rename, delete, a source lost since the answer,
-  both locales, keyboard only. Needs a slow fake answer or a real key to see the stream move.
+## 23. Found walking the big kit in a browser, 2026-11-12
+
+`DC.9`, `UI.1`, `LP.1`, `LP.3` and `AI.2` were walked and measured on 2026-11-12, in headless
+Chromium over the DevTools protocol; they are in [`archive/DONE.md`](archive/DONE.md) §23 with
+five fixes found on the way. These seven were found and not fixed. IDs are `WK.<n>`, new. Lite
+shares the code of all but `WK.1`, `WK.2` and `WK.4`.
+
+- [ ] `WK.1` **Nobody can start a conversation in the browser.** `/messages` says "Start one to
+  see it here" and offers nothing: `MessagingMutations.useCreateConversation` and the
+  `messaging.create.*` copy exist in both locales, but no screen uses them. The walk created one
+  over `conversation/create`.
+- [ ] `WK.2` **A message's React and Mention pickers render as empty boxes.** Both are named for
+  a screen reader (`aria-label` "React", "Mention…"), but nothing visible says what they are.
+- [ ] `WK.3` **The editor never says a draft saved.** Autosave posts `docPage/save` two seconds
+  after the last key and the status goes from "Unsaved changes" back to "Draft". The
+  `doc.editor.saving` and `doc.editor.saved` strings are written and unused.
+- [ ] `WK.4` **Retention shows an error on an untouched form.** For `messages` and
+  `message_reactions`, never dropped, the page shows "Enter a whole number of months, at least
+  one." with Save disabled before anything is typed. The warning above them reads "it now
+  holds —", naming no value.
+- [ ] `WK.5` **Revoking a doc grant drops focus to the page.** `RW.23` kept focus after revoking
+  an API key; the grant panel's Revoke does not.
+- [ ] `WK.6` **A grant's reason is required, and the field does not say so.** Grant access stays
+  disabled until it has text, with no hint why.
+- [ ] `WK.7` **The app shell has no layout.** `_authenticated.tsx` renders a bare `<header>`:
+  underlined links in a row, no sidebar, the logo painted black. It has been so since
+  2026-09-29, and the component library has a `Sidebar`. A decision more than a defect: whether
+  the kit ships a styled shell.
 
 ---
 

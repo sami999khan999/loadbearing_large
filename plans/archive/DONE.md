@@ -2046,10 +2046,56 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   refused, a fresh mention claimed her device's push and the worker logged no error, and
   unsubscribing removed the row. Not checked: a real browser receiving one.
 
+## 23. The browser walks and the benchmark, 2026-11-12
+
+Walked in headless Chromium over the DevTools protocol, the `HANDOFF.md` recipe, against
+`pnpm dev` on the sharded and analytics profiles, with `ASSISTANT_PROVIDER=fake` at 150 ms a
+chunk. Users alice (platform admin), bob (owner of "Bob") and carol (member there). What the walks
+found and did not fix is `BACKLOG.md` §23.
+
+- [x] `UI.1` **The UI stack, by hand** `done: 2026-11-12` — `/kitchen-sink` in all six themes,
+  light and dark; Midnight stays dark under a light preference. By keyboard: `Select` (arrows,
+  Home/End, typing, Escape returns focus, Enter picks), `Menu` the same, the popover (Escape
+  returns focus), `ThemeToggle` (arrows switch mode), `Dialog` (focus in, Tab trapped, Escape
+  back to the trigger) and `AlertDialog` (focus on Cancel). The command palette lives in the doc
+  reader and opens on Ctrl+K there. The dashboard's zones hid and showed a card with
+  `widget.dismissal` targeted at one organization, then put back. Messaging: a message sent by
+  Enter; the inbox row is a button. Retention and cold storage render. The reader in a Forest
+  space keeps Forest in its search palette. Found: `WK.1`, `WK.2`, `WK.4`, `WK.7`, and the
+  not-found, error and pending states all drew a check mark (`876fa6bd`).
+- [x] `DC.9` **The doc editing screens, by hand** `done: 2026-11-12` — as bob: a space created
+  with the owner audience on offer, a page added by Enter, autosave posting `docPage/save` two
+  seconds after the last key, Preview rendering a callout, an image uploaded by presigned POST to
+  MinIO, two publishes, Compare showing the diff and Restore putting revision 1 back. As alice: a
+  granted space, a grant to "Bob" that let bob read it (signed out: 404) and a revoke that took
+  it away. Found and fixed: an uploaded image was spliced at the caret, which sits at 0 after
+  Preview, so `# Welcome` became `![…](…)# Welcome` and lost its heading (`fc0d6151`); the
+  parent picker was labelled "Add", like the button, with "—" for the top level (`7a990cad`,
+  `ded58e6f`). Found: `WK.3`, `WK.5`, `WK.6`.
+- [x] `LP.1` **The platform organization, by hand** `done: 2026-11-12` — the platform menu lists
+  all ten pages plus Team, Roles and Docs; the role grid has its Platform administrator column;
+  Change role on Members moved carol to Guest after its confirm and back; the reader's sidebar in
+  a Plum space scrolls with the themed thin thumb; "Only me" is in the space form.
+- [x] `LP.3` **The benchmarks, here** `done: 2026-11-12` — `pnpm doc:bench` and `pnpm bench`
+  on the sharded profile, one production web process; the figures are in `doc.md`. Both scripts
+  defaulted to lite's port 23000 (`39287aa6`, `80e105ee`, `da8b45a3`).
+- [x] `AI.2` **The Assistant, by hand** `done: 2026-11-12` — asked by Enter, the answer streaming
+  under "Writing…"; Stop by keyboard left the partial answer marked "Stopped."; a reload
+  mid-answer resumed at the next word with nothing lost or repeated; a second tab listed a new
+  thread without reloading; delete asked first with focus on Cancel; Bengali throughout; the
+  usage meter for the owner and not for a member. A source lost since the answer was not walked,
+  because the fake model cites nothing; `assistant-thread.panel.spec.tsx` covers it. Found and
+  fixed: the rename field's label named no input and Enter did nothing (`6020e67c`); a rename or
+  delete never reached the other tab, because only a settled answer published
+  `assistant.changed` (`67567aae`, `3fd4e7a2`).
+
+---
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **The browser walks and the benchmark:** `UI.1`, `DC.9`, `LP.1`, `LP.3` and `AI.2` closed, five fixes on the way and seven findings opened as `WK.1`–`WK.7` |
 | 2026-11-12 | @sami | **`CR.20` closed, and section 10 with it:** the projection walks only tenants with new rows, with an hourly sweep for a lost mark |
 | 2026-11-12 | @sami | **`26.3` closed:** web push, a third channel |
 | 2026-11-12 | @sami | **`26.1` closed:** threads, the last of it |

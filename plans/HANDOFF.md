@@ -1,6 +1,6 @@
 ---
 title: Handoff — where the access and visibility plan stands, and how to pick it up anywhere
-updated: 2026-09-30
+updated: 2026-11-12
 owner: sami
 ---
 
@@ -12,23 +12,17 @@ machine setup, test data, how each phase was checked, and the traps that cost ti
 
 ## Where it stands
 
-- **The plan is built and archived (2026-09-30).** Phases 1–11 are done. The hand walk
-  (`AX11.3`) passed every Exit line, and the whole-plan verification passed.
-- **What is open is boxed in [`BACKLOG.md`](BACKLOG.md) §13**, eight items:
-  - `AX11.2`, the flag's retirement, waits on its trigger.
-  - Two bugs: `AX7.5` (badge hue) and `AX3.10` (§18 and primary keys). `AX11.4` closed
-    2026-09-30.
-  - Five small items that block nothing.
-- **`check:architecture` is 31/31.** `pnpm test` runs 2,039 tests and `pnpm smoke` 55.
-- **Then the backlog, 2026-09-30.** Six items closed, each with a spec that fails without it, and
-  each moved to `archive/DONE.md` with its proof:
-  - `RV.8`, the route-tree import, and `RV.9`, §29 and its spec counting four shard readers.
-  - `AX11.4`, the kitchen sink's picker.
-  - `RV.6`, a failed command inside the realtime `MULTI` is logged rather than dropped.
-  - `RV.5`, mail dedupes for a day through the new `onceWithin` port option.
-  - `RV.2`, only an event frame moves the client's resume point.
-- **Stopped at `BACKLOG.md` §14's last three**, `RV.3`, `RV.4` and `RV.7`. Each waits on a
-  decision, below.
+- **2026-11-12: everything that code or a browser could close is closed.** `CR.20` (the
+  projection walks only tenants with new rows) and section 10 with it; the browser walks
+  `UI.1`, `DC.9`, `LP.1`, `AI.2` and the benchmark `LP.3`. Before that, on 2026-11-10 to 12, the
+  messaging features `26.1`, `26.3`, `26.6`, `26.7`, `26.10` and `26.11`, `RV.3` and the
+  assistant's `AI.1`, `AI.3` and `AI.4`.
+- **What is open is [`BACKLOG.md`](BACKLOG.md).** Section 23 is the next work: seven findings
+  from the walks, `WK.1` (no way to start a conversation) the largest. The rest waits on
+  hardware, traffic, a trigger or a decision.
+- **`check:architecture` is 32/32.** `pnpm test` runs 2,606 tests and `pnpm smoke` 55.
+- The access and visibility plan, built 2026-09-28 to 30, is archived in
+  [`ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md).
 
 ## Setting up a new machine
 
@@ -182,36 +176,38 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
   - Biome `overrides` replace rule options rather than merging them, and its `noRestrictedImports`
     flags `import type` too.
 
+## Walking in a browser without the extension
+
+The 2026-11-12 walks drove Playwright's cached Chromium
+(`~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome --headless=new
+--remote-debugging-port=9333`) over the DevTools protocol, with Node's built-in `WebSocket`:
+navigate, `Runtime.evaluate` with `replMode: true` for top-level `await`, `Input.dispatchKeyEvent`
+(Enter needs `text: "\r"` to activate a button), `Input.insertText`, `DOM.setFileInputFiles` and
+`Page.captureScreenshot`. Traps:
+
+- **A full-page capture does not paint `content-visibility: auto` sections off screen.** Doc
+  blocks looked empty in every theme until scrolled into view.
+- **`/kitchen-sink` is dev only;** the production build answers 404.
+- **Production web listens on `PORT`, not `WEB_PORT`.** Run it as
+  `PORT=13000 WEB_PROCESSES=1 pnpm --filter @loadbearing/web start` for the benchmarks.
+
 ## What is next
 
-Where the work stopped on 2026-09-30, in the order it was going to be taken:
-
-1. **`RV.4`, stream revalidation — its safe half is done (2026-09-30).** A check still
-   running when the next minute comes is now skipped, and the pool comment and
-   `apps/realtime/docs/reference/env.md` say what the checks cost. What is left needs a design:
-   one query per tick. The user stream's `isActive` batches easily. The conversation stream's
-   principal refresh and membership check span tenants and nodes, and every query must stay
-   scoped to one tenant.
-2. **`RV.3`, the replay log per member.** Pick one of the two fixes, below.
-3. **`RV.7`, 22 comments split by a `// ──` separator mid-sentence.** Mechanical, and touches many
-   packages: cut each to two lines, then make §14 fail a separator whose line above does not end
-   a sentence.
+1. **`BACKLOG.md` §23**, in order of size: `WK.1` (a create-conversation form, from
+   `MessagingMutations.useCreateConversation` and the `messaging.create.*` copy), then the six
+   small ones. `WK.7` is a decision first: whether the kit ships a styled app shell.
+2. **Port to lite** what it shares of §23 when each lands.
 
 The rest of `BACKLOG.md` waits on hardware, traffic or a trigger: `AX11.2` before 2027-03-31,
-`S.2`, `S.3`, `26.8`, `CP7.9`, and the communication features in §11.
+`S.2`, `S.3`, `24.7`, `26.4`, `26.8`.
 
-**The machine was left running**, and nothing on it needs undoing:
-- `pnpm dev` stopped on its own (SIGTERM). The containers are up with the `observability`,
-  `sharded`, `replica`, `analytics` and `cold-tier` profiles.
-- The test data is alice, bob and carol, the "Bob" and "Carol" orgs, and one empty DM. The flag
-  is off, with no targets.
+**The machine was left running** (Linux, 2026-11-12): the containers with the `observability`,
+`sharded` and `analytics` profiles; `pnpm dev`'s web, worker and realtime. The test data is alice
+(platform admin), bob (owner of "Bob"), carol (member of "Bob"), one direct conversation, the
+spaces `bench` (2,000 pages, from `doc:bench`), `walk` (Forest, one page) and `partners` (granted,
+no grants), and three assistant threads.
 
 ## Open decisions for the owner
 
-- **`AX7.5`:** switching the badge tints (and possibly the hover mixes) to `color-mix(in oklab, …)`.
-  That changes a rule in `docs/ai/rules/color.md`, so it waits for a yes.
-- **`RV.3`:** there are two ways to fix it.
-  - Skip the replay log for per-member fan-out frames. They are list invalidations only, so a
-    reconnecting member resyncs instead of replaying them.
-  - Or measure the cost first, at `26.8`'s 25 000-member scale, which needs hardware.
-- **`RV.4`:** the design of the batched check. The safe half shipped on its own.
+- **`WK.7`:** whether the app shell gets a layout, and if so whether it is `Sidebar`.
+- **`26.4`:** archiving old `messages` partitions reopens decision D47.
