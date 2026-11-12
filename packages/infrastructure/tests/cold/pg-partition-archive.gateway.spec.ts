@@ -307,6 +307,34 @@ describe("PgPartitionArchiveGateway.archive", () => {
   });
 });
 
+// `26.4`. A restored message month is back in Postgres to be read, and the retention pass
+// archiving it again that night would undo the restore. The hold is in the index.
+describe("PgPartitionArchiveGateway.hold", () => {
+  it("passes over a held tenant-month, then archives it once the hold is over", async () => {
+    await freshPartitions();
+    await write(first, "task.reactivated", 2);
+    await write(second, "task.reactivated", 2);
+    const storage = new FakeStorage();
+    await gateway(storage).archive(TABLE, PERIOD);
+
+    // Back in Postgres, as a restore leaves it, and held there.
+    await freshPartitions();
+    await write(first, "task.reactivated", 2);
+    await gateway(storage).hold(TABLE, PERIOD, first, new Date("2099-01-01T00:00:00Z"));
+
+    const held = await gateway(storage).archive(TABLE, PERIOD);
+    expect(held.dropped).toEqual([monthPartition(second)]);
+    expect(await exists(monthPartition(first))).toBe(true);
+
+    await gateway(storage).hold(TABLE, PERIOD, first, new Date("2000-01-01T00:00:00Z"));
+    const released = await gateway(storage).archive(TABLE, PERIOD);
+    expect(released.dropped).toEqual([monthPartition(first)]);
+
+    const [row] = await gateway(storage).entriesFor(TABLE, ISO, first);
+    expect(row?.heldUntil).toBeNull();
+  });
+});
+
 // `CR.15`. A run cut off between the detach and the drop left a standalone table that no
 // query could read and no later run could find, so the month was gone for good.
 describe("PgPartitionArchiveGateway.recover", () => {

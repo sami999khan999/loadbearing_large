@@ -113,6 +113,7 @@ type EntryRow = {
   checksum: string;
   action_counts: Record<string, number>;
   projected_at: string | null;
+  held_until: string | null;
 };
 
 // An alias, not an interface, for the reason `ArchiveRow` gives: drizzle's `execute<T>`
@@ -163,8 +164,12 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     const objects: ArchivedObject[] = [];
     const dropped: string[] = [];
 
+    // A restored month held in Postgres stays there until its hold runs out (`26.4`).
+    const held = await this.heldTenants(table, period);
     const children = (await this.childrenOf(entry, period)).filter(
-      (child) => !organizationId || child.organizationId === organizationId,
+      (child) =>
+        (!organizationId || child.organizationId === organizationId) &&
+        !held.has(child.organizationId),
     );
 
     for (const child of children) {
@@ -310,6 +315,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
         bytes: object.bytes,
         checksum: object.checksum,
         actionCounts: object.actionCounts,
+        heldUntil: null,
       })
       .onConflictDoUpdate({
         target: [
@@ -323,8 +329,40 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
           bytes: object.bytes,
           checksum: object.checksum,
           actionCounts: object.actionCounts,
+          // Archived again, so cold only: the month a hold kept in Postgres has left it.
+          heldUntil: null,
         },
       });
+  }
+
+  public async hold(
+    table: PartitionedTableName,
+    period: Date,
+    organizationId: OrganizationId,
+    until: Date,
+  ): Promise<void> {
+    await this.catalogDb.execute(
+      sql`update partition_archive
+          set held_until = ${until.toISOString()}::timestamptz
+          where organization_id = ${organizationId}::uuid
+            and table_name = ${table}
+            and period = ${PgPartitionArchiveGateway.iso(period)}::date`,
+    );
+  }
+
+  // Read from the catalog before any child is detached, so a held month is never touched.
+  private async heldTenants(
+    table: PartitionedTableName,
+    period: Date,
+  ): Promise<ReadonlySet<string>> {
+    const rows = await this.catalogDb.execute<{ organization_id: string }>(
+      sql`select organization_id::text as organization_id
+          from partition_archive
+          where table_name = ${table}
+            and period = ${PgPartitionArchiveGateway.iso(period)}::date
+            and held_until > now()`,
+    );
+    return new Set(rows.rows.map((row) => row.organization_id));
   }
 
   // Into a scratch table, never the live parent: a re-attached month puts archived rows
@@ -590,7 +628,8 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     const rows = await this.catalogDb.execute<EntryRow>(
       sql`select organization_id::text as organization_id, table_name, period::text as period,
                  object_key,
-                 row_count, bytes::bigint::text as bytes, checksum, action_counts, projected_at
+                 row_count, bytes::bigint::text as bytes, checksum, action_counts, projected_at,
+                 held_until
           from partition_archive
           where organization_id = ${organizationId}::uuid and table_name = ${table}
           order by period`,
@@ -684,7 +723,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     const rows = await this.catalogDb.execute<EntryRow>(
       sql`select organization_id::text as organization_id, table_name, period::text as period,
                  object_key, row_count, bytes::bigint::text as bytes, checksum,
-                 action_counts, projected_at
+                 action_counts, projected_at, held_until
           from partition_archive
           where table_name = ${table} and period = ${period}::date ${tenant}
           order by organization_id`,
@@ -705,6 +744,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
       checksum: row.checksum,
       actionCounts: row.action_counts,
       projectedAt: row.projected_at === null ? null : new Date(row.projected_at),
+      heldUntil: row.held_until === null ? null : new Date(row.held_until),
     };
   }
 

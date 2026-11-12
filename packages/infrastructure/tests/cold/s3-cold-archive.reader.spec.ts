@@ -51,6 +51,7 @@ const entry = (overrides: Partial<PartitionArchiveEntry> = {}): PartitionArchive
   checksum: "",
   actionCounts: {},
   projectedAt: null,
+  heldUntil: null,
   ...overrides,
 });
 
