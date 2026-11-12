@@ -49,7 +49,10 @@ export function RestorePartitionPanel({ tables }: RestorePartitionPanelProps) {
           label={t("platform.restore.table")}
           value={tableName}
           onValueChange={setTableName}
-          options={tables.map((table) => ({ value: table.tableName, label: table.tableName }))}
+          // A group member is restored through the table it follows, never on its own.
+          options={tables
+            .filter((table) => !table.follows)
+            .map((table) => ({ value: table.tableName, label: table.tableName }))}
         />
       </Field>
 

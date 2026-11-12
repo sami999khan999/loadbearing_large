@@ -102,6 +102,18 @@ export function RetentionPolicyForm() {
       {retention.data.postgres.map((row: RetentionEntryDto) => {
         const draft = draftFor(row);
 
+        // A message's reactions and files take the messages row's setting (`26.4`).
+        if (row.follows) {
+          return (
+            <fieldset key={row.tableName}>
+              <legend>
+                <code>{row.tableName}</code>
+              </legend>
+              <p>{t("platform.retention.follows", { table: row.follows })}</p>
+            </fieldset>
+          );
+        }
+
         return (
           <fieldset key={row.tableName}>
             <legend>
@@ -112,6 +124,7 @@ export function RetentionPolicyForm() {
             </legend>
 
             {row.neverDropped ? <p>{t("platform.retention.neverDropped")}</p> : null}
+            {row.domainData ? <p>{t("platform.retention.domainData")}</p> : null}
 
             <Field label={t("platform.retention.hotMonths")} htmlFor={`hot-${row.tableName}`}>
               <Input
@@ -123,32 +136,36 @@ export function RetentionPolicyForm() {
               />
             </Field>
 
-            <Field
-              label={t("platform.retention.coldMonths")}
-              htmlFor={`cold-${row.tableName}`}
-              hint={t("platform.retention.coldMonths.hint")}
-            >
-              <Input
-                id={`cold-${row.tableName}`}
-                type="number"
-                min={0}
-                value={draft.coldMonths}
-                onChange={(event) => edit(row, { coldMonths: event.target.value })}
-              />
-            </Field>
+            {row.domainData ? null : (
+              <Field
+                label={t("platform.retention.coldMonths")}
+                htmlFor={`cold-${row.tableName}`}
+                hint={t("platform.retention.coldMonths.hint")}
+              >
+                <Input
+                  id={`cold-${row.tableName}`}
+                  type="number"
+                  min={0}
+                  value={draft.coldMonths}
+                  onChange={(event) => edit(row, { coldMonths: event.target.value })}
+                />
+              </Field>
+            )}
 
-            <div>
-              {MODES.map((mode) => (
-                <Button
-                  key={mode}
-                  variant={draft.coldMode === mode ? "primary" : "secondary"}
-                  aria-pressed={draft.coldMode === mode}
-                  onClick={() => edit(row, { coldMode: mode })}
-                >
-                  {t(`platform.retention.mode.${mode}` as never)}
-                </Button>
-              ))}
-            </div>
+            {row.domainData ? null : (
+              <div>
+                {MODES.map((mode) => (
+                  <Button
+                    key={mode}
+                    variant={draft.coldMode === mode ? "primary" : "secondary"}
+                    aria-pressed={draft.coldMode === mode}
+                    onClick={() => edit(row, { coldMode: mode })}
+                  >
+                    {t(`platform.retention.mode.${mode}` as never)}
+                  </Button>
+                ))}
+              </div>
+            )}
 
             {
               // The one setting on this page that destroys data, said before the save

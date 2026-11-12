@@ -31,6 +31,7 @@ export interface MessageListProps {
 interface MessagePage {
   readonly items: readonly MessageDto[];
   readonly olderCursor: string | null;
+  readonly archivedThrough?: string | null;
 }
 
 export function MessageList({ conversationId, nameFor, mentionable }: MessageListProps) {
@@ -58,7 +59,18 @@ export function MessageList({ conversationId, nameFor, mentionable }: MessageLis
     );
   }
 
-  if (rows.length === 0) return <EmptyState title={t("messaging.conversation.empty")} />;
+  // The oldest page carries it, and only once there is nothing older left to load (`26.4`).
+  const pages: readonly MessagePage[] = thread.data?.pages ?? [];
+  const archivedThrough = thread.hasNextPage ? null : (pages.at(-1)?.archivedThrough ?? null);
+  const archived = archivedThrough ? (
+    <Callout tone="info">
+      {t("messaging.conversation.archived", { month: archivedThrough.slice(0, 7) })}
+    </Callout>
+  ) : null;
+
+  if (rows.length === 0) {
+    return archived ?? <EmptyState title={t("messaging.conversation.empty")} />;
+  }
 
   return (
     <div>
@@ -69,7 +81,9 @@ export function MessageList({ conversationId, nameFor, mentionable }: MessageLis
           <Button variant="secondary" onClick={() => void thread.fetchNextPage()}>
             {t("messaging.conversation.loadOlder")}
           </Button>
-        ) : null
+        ) : (
+          archived
+        )
       }
 
       <ol>

@@ -167,3 +167,42 @@ describe("TypingNotice", () => {
     expect(screen.queryByText(new RegExp(GRACE))).toBeNull();
   });
 });
+
+// `26.4`. Older months may be in cold storage; the conversation says so where it ends.
+describe("MessageList — archived months", () => {
+  const archivedClient = (items: readonly MessageDto[]) =>
+    ({
+      message: {
+        list: () => Promise.resolve({ items, olderCursor: null, archivedThrough: "2025-03-01" }),
+      },
+    }) as unknown as ApiClient;
+
+  it("says which months are archived and who can restore them, above the oldest message", async () => {
+    await renderWithFakes(
+      <MessageList conversationId="00000000-0000-7000-8000-0000000000c1" />,
+      capabilitiesWith([]),
+      TEST_USER,
+      ["messaging"],
+      archivedClient([message()]),
+    );
+
+    expect(
+      await screen.findByText(
+        "Messages up to 2025-03 are archived. A platform administrator can restore them.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("says it instead of the empty state when every message is archived", async () => {
+    await renderWithFakes(
+      <MessageList conversationId="00000000-0000-7000-8000-0000000000c1" />,
+      capabilitiesWith([]),
+      TEST_USER,
+      ["messaging"],
+      archivedClient([]),
+    );
+
+    expect(await screen.findByText(/are archived/)).toBeDefined();
+    expect(screen.queryByText("No messages yet. Say something.")).toBeNull();
+  });
+});
