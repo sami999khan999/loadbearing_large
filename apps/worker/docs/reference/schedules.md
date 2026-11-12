@@ -93,7 +93,8 @@ deliveries it creates cannot starve it.
 `partitions-monthly` ensures months ahead **and** retires months behind, per table. Retiring a
 month is not a drop: the tenant-month is detached, streamed to S3, recorded in `partition_archive`
 and verified, and only then dropped. `activity_log` at thirteen months, `notifications` at twelve,
-`outbox_event` at two; `messages` is domain data and is never retired at all. There is no separate
+`outbox_event` at two; `messages` is domain data, kept until a retention row says otherwise and
+then only archived, with its reactions and files, never dropped (`26.4`). There is no separate
 archive job, because there is no month left that is dropped without one.
 
 `outbox_event` carries one guard: if the oldest *unpublished* row is older than the cutoff, the

@@ -70,6 +70,10 @@ export class MaintenanceConsumer {
   // the next two, so two consecutive missed runs survive and the third is an outage.
   private static readonly MONTHS_PER_RUN = 3;
 
+  // How long a restored message month stays in Postgres before it is archived again:
+  // long enough to read and act on, short enough that a restore is not a policy change.
+  private static readonly RESTORE_HOLD_MS = 30 * 24 * 60 * 60 * 1000;
+
   // Below this, say so — and **before** ensuring, never after. `MONTHS_PER_RUN` always
   // leaves two months ahead, so a check after it could never fire.
   private static readonly MIN_MONTHS_AHEAD = 2;
@@ -198,7 +202,12 @@ export class MaintenanceConsumer {
 
     // Inside the window, the retention pass will not argue with it. Outside, the
     // scratch table stays as evidence — nothing sweeps it, on purpose.
-    const inWindow = cutoff === null || period.getTime() >= cutoff.getTime();
+    // ──
+    // A message month is restored to be read, so it is attached wherever it falls and
+    // held there; the retention pass archives it again once the hold runs out (`26.4`).
+    const domain = PartitionedTable.isDomainData(table);
+    const inWindow = domain || cutoff === null || period.getTime() >= cutoff.getTime();
+    const heldUntil = new Date(now.getTime() + MaintenanceConsumer.RESTORE_HOLD_MS);
 
     for (const entry of entries) {
       // Placed per entry, not per job: the index is catalog and the scratch table and
@@ -216,6 +225,14 @@ export class MaintenanceConsumer {
             PartitionedTable.byName(table).tenantKey ? entry.organizationId : null,
             period,
             outcome.scratchTable,
+          );
+        }
+        if (domain) {
+          await this.container.partitionArchive.hold(
+            table,
+            period,
+            entry.organizationId,
+            heldUntil,
           );
         }
 

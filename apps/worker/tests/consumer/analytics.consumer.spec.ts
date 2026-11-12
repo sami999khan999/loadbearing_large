@@ -197,6 +197,7 @@ describe("AnalyticsConsumer reconcile over the cold window", () => {
     checksum: "x",
     actionCounts: { "ai.document.searched": 1 },
     projectedAt,
+    heldUntil: null,
   });
 
   // A known gap is not drift: the Gaps panel already says so, and a second alert
@@ -247,6 +248,7 @@ describe("AnalyticsConsumer reproject", () => {
     checksum: "x",
     actionCounts: {},
     projectedAt: null,
+    heldUntil: null,
   };
 
   const line = (id: string, action: string) => ({
