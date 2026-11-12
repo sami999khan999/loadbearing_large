@@ -229,6 +229,7 @@ import {
   PreviewRetentionChangeUseCase,
   Principal,
   PrincipalBuilder,
+  type ProjectionBacklogStore,
   type ProjectionPolicyRepository,
   PublishDocPageUseCase,
   PurgeOrganizationUseCase,
@@ -252,6 +253,7 @@ import {
   RedisCacheStore,
   RedisConnection,
   RedisPresenceReader,
+  RedisProjectionBacklogStore,
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
@@ -542,6 +544,8 @@ export class Container {
   private readonly assistantUsageProjector: AssistantUsageProjector | undefined;
   // The walk the projection reads `ai_usage` through, routed like every assistant table.
   public readonly assistantUsageRecords: AssistantUsageRepository;
+  // Which tenants have rows to project (`CR.20`). Present exactly when ClickHouse is.
+  public readonly projectionBacklog: ProjectionBacklogStore | undefined;
   private readonly logReader: LogReader | undefined;
 
   // ── auth, absent in a process that never authenticates ────
@@ -953,10 +957,15 @@ export class Container {
       this.localUnitOfWork,
     );
     this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
+    this.projectionBacklog = config.analytics.clickhouse
+      ? new RedisProjectionBacklogStore(this.redis.client(), this.logger)
+      : undefined;
     this.assistantUsageRecords = new PgAssistantUsageRepository(
       this.cluster,
       this.transactions,
       this.shards,
+      this.clock,
+      this.projectionBacklog ?? null,
     );
 
     // ── the swap points ──
@@ -1013,7 +1022,13 @@ export class Container {
 
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
-    const activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
+    const activity = new PgActivityLogger(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      this.clock,
+      this.projectionBacklog ?? null,
+    );
     this.activity = activity;
     this.relayedActivity = activity;
     const mailDeliveries = new PgMailDeliveryRepository(

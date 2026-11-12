@@ -184,6 +184,7 @@ export {
   PreviewRetentionChangeUseCase,
   // A value: `placedAt` builds the empty principal a placement-only read needs.
   Principal,
+  ProjectionBacklogStore,
   type ProjectionCheckpoint,
   type ProjectionGap,
   type ProjectionPolicyRecord,
@@ -449,6 +450,7 @@ export {
   RedisCacheStore,
   RedisConnection,
   RedisPresenceReader,
+  RedisProjectionBacklogStore,
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,

@@ -61,6 +61,7 @@ describe("TestContainer", () => {
       "partitionArchive",
       "placed",
       "presence",
+      "projectionBacklog",
       "pushSender",
       "queue",
       "rateLimits",
