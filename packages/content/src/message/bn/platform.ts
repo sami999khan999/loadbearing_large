@@ -140,6 +140,7 @@ export const platform = {
   "platform.restore.period": "মাস",
   "platform.restore.submit": "ফিরিয়ে আনুন",
   "platform.restore.queued": "{jobId} হিসেবে সারিবদ্ধ। {objects}টি অবজেক্ট পড়া হবে।",
+  "platform.retention.driftEmpty": "স্টোরে এখনো কোনো নিয়ম নেই। রাতের কাজ এটি ঠিক করবে।",
   "platform.retention.drift": "স্টোরে অন্য কিছু আছে। রাতের কাজ এটি ঠিক করবে; এখন সেখানে আছে {actual}।",
   "platform.shards.title": "শার্ড ম্যাপ",
   "platform.shards.description":

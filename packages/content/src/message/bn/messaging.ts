@@ -28,6 +28,9 @@ export const messaging = {
   "messaging.create.submit": "শুরু করুন",
   "messaging.create.name": "নাম",
   "messaging.create.people": "সদস্য",
+  "messaging.create.hint":
+    "একজন সদস্য ও কোনো নাম না দিলে সরাসরি বার্তা শুরু হয়; নাম দিলে বা একাধিক সদস্য বাছলে একটি গ্রুপ হয়।",
+  "messaging.create.nobody": "এই প্রতিষ্ঠানে এখনো আর কেউ নেই।",
 
   "messaging.typing.one": "{name} লিখছেন…",
   "messaging.typing.many": "একাধিক জন লিখছেন…",

@@ -31,6 +31,9 @@ export const messaging = {
   "messaging.create.submit": "Start",
   "messaging.create.name": "Name",
   "messaging.create.people": "People",
+  "messaging.create.hint":
+    "One person and no name starts a direct message; a name or more people make a group.",
+  "messaging.create.nobody": "Nobody else is in this organization yet.",
 
   "messaging.typing.one": "{name} is typing…",
   "messaging.typing.many": "Several people are typing…",

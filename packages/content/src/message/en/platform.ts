@@ -179,6 +179,8 @@ export const platform = {
   "platform.restore.period": "Month",
   "platform.restore.submit": "Restore",
   "platform.restore.queued": "Queued as {jobId}. {objects} objects to read back.",
+  "platform.retention.driftEmpty":
+    "The store holds no rules yet. The nightly run will put this right.",
   "platform.retention.drift":
     "The store holds something else. The nightly run will put this right; it now holds {actual}.",
   "platform.shards.title": "Shard map",
