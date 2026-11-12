@@ -37,6 +37,10 @@ export const FIELD_RULE_COPY: Readonly<Record<string, ShellMessageKey>> = {
   taken: "error.field.taken",
   // A grant on a space only its author may read.
   private: "error.field.private",
+  // Message months (`26.4`): always archived, never dropped, never expired in cold.
+  domainData: "error.field.domainData",
+  // A message's reactions and files take the messages table's setting.
+  group: "error.field.group",
 };
 
 // The seam an error page, boundary, or toast calls. Writes the unknown-rule fallback once.

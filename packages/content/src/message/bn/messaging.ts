@@ -13,6 +13,10 @@ export const messaging = {
   "messaging.conversation.empty": "এখনও কোনও বার্তা নেই। কিছু বলুন।",
   "messaging.conversation.error": "এই কথোপকথনটি লোড করা যায়নি।",
   "messaging.conversation.loadOlder": "পুরনো বার্তা দেখুন",
+  "messaging.conversation.archived":
+    "{month} পর্যন্ত বার্তাগুলো আর্কাইভ করা আছে। একজন প্ল্যাটফর্ম প্রশাসক এগুলো ফিরিয়ে আনতে পারেন।",
+  "messaging.thread.rootArchived":
+    "এই থ্রেডের শুরুটা আর্কাইভ করা আছে। একজন প্ল্যাটফর্ম প্রশাসক এটি ফিরিয়ে আনতে পারেন।",
   "messaging.conversation.deleted": "এই বার্তাটি মুছে ফেলা হয়েছে।",
   "messaging.conversation.edited": "সম্পাদিত",
   "messaging.conversation.leave": "কথোপকথন ছাড়ুন",

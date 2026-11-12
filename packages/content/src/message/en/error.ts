@@ -22,4 +22,7 @@ export const error = {
   "error.field.min": "{field} is below the smallest value we allow.",
   "error.field.taken": "{field} is already in use.",
   "error.field.private": "{field} is private to its author, so it cannot be shared.",
+  "error.field.domainData":
+    "{field} cannot be set for messages: their months are archived, never dropped or expired.",
+  "error.field.group": "{field} follows the messages table and is set there.",
 } as const;

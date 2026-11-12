@@ -54,7 +54,10 @@ export const platform = {
   "platform.retention.save": "সংরক্ষণ",
   "platform.retention.default": "ডিফল্ট",
   "platform.retention.mode.warning": "এভাবে বাদ দেওয়া মাস কোল্ড স্টোরেজে থাকে না এবং ফিরিয়ে আনা যায় না।",
-  "platform.retention.neverDropped": "কখনও বাদ দেওয়া হয় না — ডোমেইন তথ্য।",
+  "platform.retention.neverDropped": "Postgres-এ রাখা হয়: কোনো মাস সেট নেই, তাই কিছুই আর্কাইভ হয় না।",
+  "platform.retention.domainData":
+    "নিচের মাসের চেয়ে পুরনো হলে এর প্রতিক্রিয়া ও ফাইলসহ কোল্ড স্টোরেজে আর্কাইভ হয় এবং সেখানেই থাকে: কখনো মুছে ফেলা বা মেয়াদোত্তীর্ণ হয় না। একজন প্ল্যাটফর্ম প্রশাসক কোনো মাস ফিরিয়ে আনতে পারেন।",
+  "platform.retention.follows": "{table} অনুসরণ করে: এর মাসগুলো সেগুলোর সাথেই আর্কাইভ ও ফিরিয়ে আনা হয়।",
   "platform.retention.clickhouse": "ক্লিকহাউস",
   "platform.retention.clickhouse.months": "বিশ্লেষণ ইতিহাসের মাস",
   "platform.retention.preview.loading": "এটি কী বাদ দেবে তা হিসাব করা হচ্ছে…",

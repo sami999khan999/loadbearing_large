@@ -14,6 +14,10 @@ export const messaging = {
   "messaging.conversation.empty": "No messages yet. Say something.",
   "messaging.conversation.error": "This conversation could not be loaded.",
   "messaging.conversation.loadOlder": "Load older messages",
+  "messaging.conversation.archived":
+    "Messages up to {month} are archived. A platform administrator can restore them.",
+  "messaging.thread.rootArchived":
+    "The start of this thread is archived. A platform administrator can restore it.",
   "messaging.conversation.deleted": "This message was deleted.",
   "messaging.conversation.edited": "edited",
   "messaging.conversation.leave": "Leave conversation",
