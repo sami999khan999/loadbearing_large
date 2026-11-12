@@ -107,6 +107,7 @@ export {
   type RedisConfig,
   RedisConnection,
   RedisPresenceReader,
+  RedisProjectionBacklogStore,
   RedisRateLimitStore,
   type RedisRealtimeConfig,
   RedisRealtimePublisher,

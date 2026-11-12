@@ -4,22 +4,37 @@ import {
   type AssistantUsageTotal,
   and,
   asc,
+  type Clock,
   eq,
   gte,
   lte,
   type OrganizationId,
   type Placement,
+  type ProjectionBacklogStore,
   type ProjectionCheckpoint,
   sql,
 } from "../../import.js";
-import { BaseRepository } from "../primitive/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { aiUsage } from "../schema/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 export class PgAssistantUsageRepository extends BaseRepository implements AssistantUsageRepository {
   protected override readonly placement: Placement = "routed";
 
+  public constructor(
+    cluster: DatabaseCluster,
+    scope: TransactionScope,
+    shards: ShardScope,
+    private readonly clock: Clock,
+    // Null without a projection to tell, as on the activity logger (`CR.20`).
+    private readonly backlog: ProjectionBacklogStore | null = null,
+  ) {
+    super(cluster, scope, shards);
+  }
+
   public async save(usage: AssistantUsageRecord): Promise<void> {
     await this.db.insert(aiUsage).values(usage);
+    await this.backlog?.mark(usage.organizationId, this.clock.now());
   }
 
   // Bounded below, so the read prunes to the months it covers.

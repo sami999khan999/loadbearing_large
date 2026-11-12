@@ -3,6 +3,7 @@ import type {
   Clock,
   Placement,
   Principal,
+  ProjectionBacklogStore,
   RelayedActivity,
   RelayedActivityStore,
 } from "../../import.js";
@@ -26,6 +27,8 @@ export class PgActivityLogger
     scope: TransactionScope,
     shards: ShardScope,
     private readonly clock: Clock,
+    // Null without a projection to tell: nothing reads the marks then (`CR.20`).
+    private readonly backlog: ProjectionBacklogStore | null = null,
   ) {
     super(cluster, scope, shards);
     this.outbox = new PgOutboxPublisher(cluster, scope, shards, clock);
@@ -56,6 +59,7 @@ export class PgActivityLogger
       payload: { ...payload },
       occurredAt: this.clock.now(),
     });
+    await this.backlog?.mark(actor.organizationId, this.clock.now());
   }
 
   // `onConflictDoNothing`, because the outbox is at-least-once and the key carries
@@ -72,6 +76,7 @@ export class PgActivityLogger
         occurredAt: entry.occurredAt,
       })
       .onConflictDoNothing();
+    await this.backlog?.mark(entry.organizationId, this.clock.now());
   }
 
   // `24.2a`. A catalog transaction is on node 0 whatever the tenant, so a tenant placed

@@ -1,5 +1,5 @@
 import { Identifiers } from "@loadbearing/contracts";
-import { Uuid } from "@loadbearing/core";
+import { SystemClock, Uuid } from "@loadbearing/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { DatabaseCluster } from "../../src/pg/primitive/index.js";
@@ -28,7 +28,7 @@ beforeAll(() => {
   const scope = new TransactionScope();
   threads = new PgAssistantThreadRepository(cluster, scope, shards);
   messages = new PgAssistantMessageRepository(cluster, scope, shards);
-  usage = new PgAssistantUsageRepository(cluster, scope, shards);
+  usage = new PgAssistantUsageRepository(cluster, scope, shards, new SystemClock());
 });
 
 afterAll(async () => {
