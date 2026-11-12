@@ -26,6 +26,9 @@ export class RealtimeContract {
       id: z.uuid(),
       name: eventName,
       at: z.coerce.date(),
+      // `false` for a frame kept out of the replay log (`RV.3`): a reopen cannot resume
+      // from it, so the client never remembers its id. Absent is logged.
+      replay: z.literal(false).optional(),
       // Ids a client may dedupe or narrow a refetch by, never data to render. Unknown keys
       // are stripped, so a publisher one deploy ahead still parses.
       payload: z.object({

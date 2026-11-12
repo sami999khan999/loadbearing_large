@@ -4,12 +4,15 @@ import {
   type ActivityReplayReader,
   AddConversationMemberUseCase,
   AdjustEntitlementUseCase,
+  AesGcmSecretCipher,
   type AnalyticsProjector,
   ApiKeyResolver,
   AssignPlanUseCase,
   AssistantBudget,
   type AssistantModel,
   AssistantRetrieval,
+  type AssistantUsageProjector,
+  type AssistantUsageRepository,
   AuthFactory,
   type AuthInstance,
   Authorizer,
@@ -28,6 +31,8 @@ import {
   ClearPermissionOverrideUseCase,
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
+  ClickHouseAssistantUsageProjector,
+  ClickHouseAssistantUsageReader,
   ClickHouseConnection,
   type Clock,
   type ColdArchiveReader,
@@ -46,6 +51,7 @@ import {
   DeleteAssistantThreadUseCase,
   DeleteDocPageUseCase,
   DeleteDocSpaceUseCase,
+  DeleteMailSettingsUseCase,
   DeleteMessageUseCase,
   DeleteOrganizationUseCase,
   DeletePlanUseCase,
@@ -77,14 +83,20 @@ import {
   GenerateAssistantAnswerUseCase,
   GetActivityTrendUseCase,
   GetAssistantThreadUseCase,
+  GetAssistantUsageReportUseCase,
+  GetAssistantUsageUseCase,
+  GetConversationPresenceUseCase,
   GetConversationUseCase,
+  GetDigestHourUseCase,
   GetDocPageUseCase,
   GetDocRevisionUseCase,
   GetDocSpaceUseCase,
   GetEntitlementUseCase,
+  GetMailSettingsUseCase,
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
+  GetPushKeyUseCase,
   GetWidgetPreferencesUseCase,
   GetWorkerFleetUseCase,
   GrantPermissionOverrideUseCase,
@@ -111,6 +123,7 @@ import {
   ListDocSpacesUseCase,
   ListFlagsUseCase,
   ListInvitationsUseCase,
+  ListMailDeliveriesUseCase,
   ListMembersUseCase,
   ListMessagesUseCase,
   ListModuleSwitchesUseCase,
@@ -125,6 +138,7 @@ import {
   ListTenantExportImagesUseCase,
   ListTenantExportsUseCase,
   ListTenantStorageUseCase,
+  ListThreadUseCase,
   LocateTenantUseCase,
   type Logger,
   type LogReader,
@@ -146,6 +160,7 @@ import {
   NullMembershipEnroller,
   OpenAiAssistantModel,
   OpenAiEmbeddingProvider,
+  OpenAttachmentUseCase,
   OpenDocImageUseCase,
   type OrganizationFounder,
   type OrganizationId,
@@ -171,13 +186,18 @@ import {
   PgFlagRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
+  PgMailDeliveryRepository,
+  PgMailSettingsRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgMessageAttachmentRepository,
+  PgMessageReactionRepository,
   PgMessageRepository,
   PgNotificationPreferenceRepository,
   PgNotificationRecipientReader,
   PgNotificationRepository,
+  PgNotificationSettingsRepository,
   PgOrganizationFounder,
   PgOrganizationReader,
   PgOutboxGateway,
@@ -188,6 +208,7 @@ import {
   PgPlatformPolicyRepository,
   PgPlatformReader,
   PgProjectionPolicyRepository,
+  PgPushSubscriptionRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgShardAssignmentRepository,
@@ -216,6 +237,7 @@ import {
   QueueName,
   type QueuePublisher,
   type RateLimitStore,
+  ReactToMessageUseCase,
   ReadDocNavUseCase,
   ReadDocPageUseCase,
   ReadPlatformDocNavUseCase,
@@ -223,11 +245,13 @@ import {
   type RealtimePublisher,
   type RealtimeSubscriber,
   ReclaimMoveSourcesUseCase,
+  RecordMailDeliveryUseCase,
   RedisAssistantBudgetStore,
   RedisAssistantStreamPublisher,
   RedisAssistantStreamSubscriber,
   RedisCacheStore,
   RedisConnection,
+  RedisPresenceReader,
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
@@ -242,6 +266,7 @@ import {
   RenameConversationUseCase,
   type ReplicaHealth,
   ReprojectPartitionUseCase,
+  RequestAttachmentUploadUseCase,
   ResendInvitationUseCase,
   ResetWorkerProcessUseCase,
   RestoreDocRevisionUseCase,
@@ -256,6 +281,7 @@ import {
   S3StoragePolicyGateway,
   SaveDocGrantUseCase,
   SaveDocPageUseCase,
+  SaveMailSettingsUseCase,
   SavePlanUseCase,
   SaveQueueAutoscaleUseCase,
   SERVER_CATALOG,
@@ -277,10 +303,12 @@ import {
   ShardScope,
   SignalTypingUseCase,
   SmtpEmailSender,
+  SmtpEmailSenderResolver,
   StaticContentSource,
   type StorageGateway,
   type StoragePolicyGateway,
   StreamAssistantAnswerUseCase,
+  SubscribePushUseCase,
   SubscriberRegistry,
   SuspendAccountUseCase,
   SwitchModuleUseCase,
@@ -293,7 +321,9 @@ import {
   TransactionScope,
   UnifiedMarkdownRenderer,
   type UnitOfWork,
+  UnsubscribePushUseCase,
   UpdateDefaultPlanUseCase,
+  UpdateDigestHourUseCase,
   UpdateDocSpaceUseCase,
   UpdateFlagTargetUseCase,
   UpdateFlagUseCase,
@@ -308,6 +338,7 @@ import {
   type UserId,
   type VectorStore,
   WatchConversationUseCase,
+  WebPushSender,
   type WorkerFleetGateway,
   type WorkerQueueSettingsRepository,
 } from "../import.js";
@@ -317,6 +348,7 @@ import {
   QueuedInvitationMailer,
   QueuedMailPublisher,
 } from "../mail/index.js";
+import { ContentPushRenderer } from "../push/index.js";
 import { OrganizationShardingStrategy } from "../shard/index.js";
 import type { ContainerConfig } from "./container.config.js";
 import { ContainerHealthReader } from "./container-health.reader.js";
@@ -499,10 +531,17 @@ export class Container {
   // behind it, and a reconciliation against nothing is simply a count.
   public readonly activityReplay: ActivityReplayReader;
 
+  // Each configured mail server's pooled sender, closed with the deployment's.
+  private readonly emailSenders: SmtpEmailSenderResolver;
+
   // ── the derived stores, absent unless configured ─────────
   // Optional fields rather than no-op implementations: a null projector is
   // indistinguishable from a working pipeline until a quarterly report comes out wrong.
   private readonly analyticsProjector: AnalyticsProjector | undefined;
+  // Follows the same connection: the usage copy lives wherever the activity copy does.
+  private readonly assistantUsageProjector: AssistantUsageProjector | undefined;
+  // The walk the projection reads `ai_usage` through, routed like every assistant table.
+  public readonly assistantUsageRecords: AssistantUsageRepository;
   private readonly logReader: LogReader | undefined;
 
   // ── auth, absent in a process that never authenticates ────
@@ -537,7 +576,18 @@ export class Container {
   };
   // Outside the `auth` block on purpose. The worker is the process that sends mail and it
   // has no auth config — which is exactly what building the old mailer in there got wrong.
-  public readonly mail: { readonly send: SendMailUseCase };
+  public readonly mail: {
+    readonly send: SendMailUseCase;
+    // A platform default and per-tenant mail servers (`26.11`), on the platform Mail page.
+    readonly settings: {
+      readonly get: GetMailSettingsUseCase;
+      readonly save: SaveMailSettingsUseCase;
+      readonly remove: DeleteMailSettingsUseCase;
+    };
+    // The delivery log (`26.10`): written by the consumer, read on the platform Mail page.
+    readonly record: RecordMailDeliveryUseCase;
+    readonly deliveries: ListMailDeliveriesUseCase;
+  };
   public readonly analytics: {
     readonly activity: GetActivityTrendUseCase;
   };
@@ -553,6 +603,11 @@ export class Container {
     readonly updatePreference: UpdateNotificationPreferenceUseCase;
     readonly deliver: DeliverNotificationUseCase;
     readonly sendDigest: SendNotificationDigestUseCase;
+    readonly digestHour: GetDigestHourUseCase;
+    readonly updateDigestHour: UpdateDigestHourUseCase;
+    readonly pushKey: GetPushKeyUseCase;
+    readonly pushSubscribe: SubscribePushUseCase;
+    readonly pushUnsubscribe: UnsubscribePushUseCase;
   };
   // `generate` is null without a model: the worker registers no `assistant` lane then, and
   // `send` answers NOT_FOUND. The rest read what an earlier deploy with a model wrote.
@@ -566,10 +621,14 @@ export class Container {
     readonly stream: StreamAssistantAnswerUseCase;
     readonly generate: GenerateAssistantAnswerUseCase | null;
     readonly failStale: FailStaleAssistantAnswersUseCase;
+    readonly usage: GetAssistantUsageUseCase;
+    readonly usageReport: GetAssistantUsageReportUseCase;
   };
   public readonly messaging: {
     readonly listConversations: ListConversationsUseCase;
     readonly getConversation: GetConversationUseCase;
+    // Who in a conversation has the app open, off the stream leases (`26.6`).
+    readonly presence: GetConversationPresenceUseCase;
     readonly createConversation: CreateConversationUseCase;
     readonly addMember: AddConversationMemberUseCase;
     readonly removeMember: RemoveConversationMemberUseCase;
@@ -577,6 +636,11 @@ export class Container {
     readonly rename: RenameConversationUseCase;
     readonly markRead: MarkConversationReadUseCase;
     readonly listMessages: ListMessagesUseCase;
+    readonly react: ReactToMessageUseCase;
+    readonly listThread: ListThreadUseCase;
+    // Files on a message (`26.1`): a signed upload, then a signed link to open one.
+    readonly requestAttachmentUpload: RequestAttachmentUploadUseCase;
+    readonly openAttachment: OpenAttachmentUseCase;
     readonly send: SendMessageUseCase;
     readonly edit: EditMessageUseCase;
     readonly remove: DeleteMessageUseCase;
@@ -889,6 +953,11 @@ export class Container {
       this.localUnitOfWork,
     );
     this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
+    this.assistantUsageRecords = new PgAssistantUsageRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
 
     // ── the swap points ──
     // Each reads a `driver` rather than naming a class: the alternative is named in a
@@ -907,6 +976,9 @@ export class Container {
     // flip: one store is written and reconciled, and the dashboard reads the same one.
     this.analyticsProjector = this.clickhouse
       ? new ClickHouseAnalyticsProjector(this.clickhouse)
+      : undefined;
+    this.assistantUsageProjector = this.clickhouse
+      ? new ClickHouseAssistantUsageProjector(this.clickhouse)
       : undefined;
 
     // `23.14`. Null without ClickHouse, which the use-case answers as "not configured"
@@ -930,7 +1002,6 @@ export class Container {
     this.email = this.emailSender;
     this.mailPublisher = new QueuedMailPublisher(this.queue, this.logger);
     this.mailRenderer = new ContentMailRenderer(this.content, config.email.baseUrl);
-    this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
     const capabilityRepository = new PgCapabilityRepository(
       this.cluster,
@@ -945,6 +1016,43 @@ export class Container {
     const activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
     this.activity = activity;
     this.relayedActivity = activity;
+    const mailDeliveries = new PgMailDeliveryRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const mailSettings = new PgMailSettingsRepository(this.cluster, this.transactions, this.shards);
+    const cipher = config.email.secretKey ? new AesGcmSecretCipher(config.email.secretKey) : null;
+    this.emailSenders = new SmtpEmailSenderResolver(
+      mailSettings,
+      cipher,
+      this.platform,
+      this.logger,
+    );
+    this.mail = {
+      send: new SendMailUseCase(this.mailRenderer, this.email, this.emailSenders),
+      settings: {
+        get: new GetMailSettingsUseCase(this.authorizer, mailSettings, cipher),
+        save: new SaveMailSettingsUseCase(
+          this.authorizer,
+          mailSettings,
+          cipher,
+          this.platform,
+          this.activity,
+          this.catalogUnitOfWork,
+          this.clock,
+        ),
+        remove: new DeleteMailSettingsUseCase(
+          this.authorizer,
+          mailSettings,
+          this.platform,
+          this.activity,
+          this.catalogUnitOfWork,
+        ),
+      },
+      record: new RecordMailDeliveryUseCase(mailDeliveries, this.platform, this.clock),
+      deliveries: new ListMailDeliveriesUseCase(this.authorizer, mailDeliveries),
+    };
     this.eventPublisher = new PgOutboxPublisher(
       this.cluster,
       this.transactions,
@@ -996,6 +1104,23 @@ export class Container {
       conversations,
     );
 
+    const notificationSettings = new PgNotificationSettingsRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const pushSubscriptions = new PgPushSubscriptionRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const pushRenderer = new ContentPushRenderer(this.content, config.email.baseUrl);
+    const push = config.push
+      ? {
+          subscriptions: pushSubscriptions,
+          sender: new WebPushSender(config.push, (payload) => pushRenderer.render(payload)),
+        }
+      : null;
     this.notification = {
       list: new ListNotificationsUseCase(this.authorizer, notifications),
       archived: new ListArchivedNotificationsUseCase(
@@ -1032,6 +1157,7 @@ export class Container {
         this.realtime,
         this.cache,
         this.routedUnitOfWork,
+        push,
       ),
       sendDigest: new SendNotificationDigestUseCase(
         notifications,
@@ -1039,6 +1165,26 @@ export class Container {
         notificationRecipients,
         this.mailPublisher,
         this.organizations,
+      ),
+      digestHour: new GetDigestHourUseCase(this.authorizer, notificationSettings),
+      updateDigestHour: new UpdateDigestHourUseCase(
+        this.authorizer,
+        notificationSettings,
+        this.activity,
+        this.catalogUnitOfWork,
+        this.clock,
+      ),
+      pushKey: new GetPushKeyUseCase(this.authorizer, config.push?.publicKey ?? null),
+      pushSubscribe: new SubscribePushUseCase(
+        this.authorizer,
+        pushSubscriptions,
+        this.routedUnitOfWork,
+        push !== null,
+      ),
+      pushUnsubscribe: new UnsubscribePushUseCase(
+        this.authorizer,
+        pushSubscriptions,
+        this.routedUnitOfWork,
       ),
     };
 
@@ -1058,6 +1204,16 @@ export class Container {
       new PgUserReader(this.cluster, this.transactions, this.shards),
     );
 
+    const messageAttachments = new PgMessageAttachmentRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const messageReactions = new PgMessageReactionRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
     this.messaging = {
       listConversations: new ListConversationsUseCase(
         this.authorizer,
@@ -1071,6 +1227,11 @@ export class Container {
         conversationAccess,
         messages,
         conversationNaming,
+      ),
+      presence: new GetConversationPresenceUseCase(
+        this.authorizer,
+        conversationAccess,
+        new RedisPresenceReader(() => this.redis.realtimeClient()),
       ),
       createConversation: new CreateConversationUseCase(
         this.authorizer,
@@ -1116,7 +1277,26 @@ export class Container {
         this.realtime,
         this.routedUnitOfWork,
       ),
-      listMessages: new ListMessagesUseCase(this.authorizer, conversationAccess, messages),
+      listMessages: new ListMessagesUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        messageReactions,
+        messageAttachments,
+      ),
+      listThread: new ListThreadUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        messageReactions,
+        messageAttachments,
+      ),
+      react: new ReactToMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        messageReactions,
+        this.realtime,
+      ),
       send: new SendMessageUseCase(
         this.authorizer,
         conversationAccess,
@@ -1127,6 +1307,18 @@ export class Container {
         this.routedUnitOfWork,
         this.cache,
         this.clock,
+        { attachments: messageAttachments, storage: this.storage },
+      ),
+      requestAttachmentUpload: new RequestAttachmentUploadUseCase(
+        this.authorizer,
+        conversationAccess,
+        this.storage,
+      ),
+      openAttachment: new OpenAttachmentUseCase(
+        this.authorizer,
+        conversationAccess,
+        messageAttachments,
+        this.storage,
       ),
       edit: new EditMessageUseCase(
         this.authorizer,
@@ -1494,6 +1686,7 @@ export class Container {
         this.tenantRetentionPolicies,
         this.shardResolver,
         new DocImageSweep(this.storage),
+        this.assistantUsageProjector ?? null,
       ),
       moveTenant: new MoveTenantUseCase(
         this.authorizer,
@@ -1939,6 +2132,14 @@ export class Container {
     return this.analyticsProjector !== undefined;
   }
 
+  // Present exactly when `projector` is: both follow the one ClickHouse connection.
+  public get usageProjector(): AssistantUsageProjector {
+    if (!this.assistantUsageProjector) {
+      throw new Error("This container was built without an analytics.clickhouse config.");
+    }
+    return this.assistantUsageProjector;
+  }
+
   // **Read while the constructor runs**, so it is derived from the cluster rather than
   // assigned later — a field set after this point would be `undefined` at the call site.
   // ──
@@ -2130,6 +2331,7 @@ export class Container {
     // Before Postgres only because nothing else depends on it: an unclosed transport is
     // its own reason to be here, not a step in the ordering above.
     await this.closing("smtp", () => this.emailSender.close());
+    await this.closing("smtp", () => this.emailSenders.close());
     // The cluster owns every pool including node 0's, so this is the one close and it
     // is last: a repository on any node may still be finishing the lines above.
     await this.closing("postgres", () => this.cluster.close());
@@ -2256,7 +2458,13 @@ export class Container {
         this.catalogUnitOfWork,
       ),
       rerender: new DocRerender(pages, renderer, cache, uow),
-      imageOrphans: new DocImageOrphans(pages, this.storage, this.clock),
+      imageOrphans: new DocImageOrphans(
+        pages,
+        this.storage,
+        this.clock,
+        this.partitionArchive,
+        this.coldArchive,
+      ),
       reindex: new ReindexDocsUseCase(auth, spaces, pages, this.documentIndex, this.clock),
     };
   }
@@ -2269,7 +2477,7 @@ export class Container {
   ): Container["assistant"] {
     const threads = new PgAssistantThreadRepository(this.cluster, this.transactions, this.shards);
     const messages = new PgAssistantMessageRepository(this.cluster, this.transactions, this.shards);
-    const usage = new PgAssistantUsageRepository(this.cluster, this.transactions, this.shards);
+    const usage = this.assistantUsageRecords;
     const capabilities = new PgCapabilityRepository(this.cluster, this.transactions, this.shards);
     // On the queue instance, which never evicts: an evicted count is a day's budget again.
     const budget = new AssistantBudget(
@@ -2335,6 +2543,13 @@ export class Container {
           )
         : null,
       failStale: new FailStaleAssistantAnswersUseCase(messages, this.clock),
+      usage: new GetAssistantUsageUseCase(auth, usage, this.clock, config?.orgDailyTokens ?? 0),
+      usageReport: new GetAssistantUsageReportUseCase(
+        auth,
+        this.clickhouse ? new ClickHouseAssistantUsageReader(this.clickhouse) : null,
+        this.organizations,
+        this.clock,
+      ),
     };
   }
 
@@ -2350,7 +2565,7 @@ export class Container {
       case "none":
         return null;
       case "fake":
-        return new CannedAssistantModel();
+        return new CannedAssistantModel({ delayMs: config.fakeDelayMs ?? 0 });
       case "openai":
         return new OpenAiAssistantModel(
           {

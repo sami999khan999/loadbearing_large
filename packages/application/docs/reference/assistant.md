@@ -130,5 +130,17 @@ The budget is checked before a question is queued and charged when its answer se
 flight may finish over the line. It lives on the queue Redis, which never evicts: an evicted count
 would be a day's budget again.
 
+## Who sees the spend
+
+| View | Who | Read from |
+|---|---|---|
+| Today and this month, one tenant | `ai.usage.read`, an administrator's key by default | `ai_usage`, a tenant-scoped Postgres read |
+| Tokens by tenant, model and day | `platform.analytics.read` | `ai_usage_events` in ClickHouse |
+
+The tenant's meter works on a deployment with no analytics store. The platform report does not:
+a sum across tenants is never a Postgres query (`docs/ai/rules/data.md`), so without ClickHouse it
+answers `configured: false` and the panel says so. Both count tokens, not money. A price per model
+is a deployment's own table, and nothing here knows one.
+
 `ASSISTANT_PROVIDER=none` builds no model. `assistant.send` then answers `NOT_FOUND`, and the
 worker registers no `assistant` lane.

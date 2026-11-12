@@ -70,6 +70,8 @@ export function RealtimeProvider({
 
         for (const listener of listeners) listener(message);
       },
+      // The user channel's unlogged frames (`RV.3`): what one missed while away is refetched.
+      onReopened: () => RealtimeRoutes.reopened(request),
       signal: controller.signal,
     });
 

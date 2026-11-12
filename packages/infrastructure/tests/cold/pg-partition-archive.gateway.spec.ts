@@ -456,10 +456,8 @@ describe("PgPartitionArchiveGateway across the allowlist", () => {
     );
     await maintenance.ensureMonthlyPartitions(PartitionedTable.NOTIFICATIONS, first, PERIOD, 1);
 
-    const [user] = await database.client
-      .execute<{ id: string }>(sql`select id from users limit 1`)
-      .then((result) => result.rows);
-    if (!user) throw new Error("run `pnpm db:seed` first, and sign one user up");
+    // Any id: `notifications` has no key to `users`, and the seed signs nobody up.
+    const user = { id: Uuid.v7() };
 
     await database.client.insert(notifications).values({
       id: Uuid.v7(),

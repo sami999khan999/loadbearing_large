@@ -7,6 +7,7 @@ import {
   InMemoryLogReader,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
+  InMemoryPresenceReader,
   InMemoryRateLimitStore,
   InMemoryRealtimeHub,
   InMemoryRealtimeSubscriber,
@@ -25,14 +26,17 @@ import {
   RecordingMailPublisher,
   RecordingMaintenanceGateway,
   RecordingPartitionArchiveGateway,
+  RecordingPushSender,
   RecordingQueuePublisher,
   RecordingRealtimePublisher,
   RecordingRelayedActivityStore,
   RecordingSessionGateway,
   ScriptedAssistantModel,
+  StubEmailSenderResolver,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubMarkdownRenderer,
+  StubSecretCipher,
   StubSessionResolver,
 } from "../fake/index.js";
 import {
@@ -47,6 +51,7 @@ import {
   type ContentSource,
   type DomainEventPublisher,
   type EmailSender,
+  type EmailSenderResolver,
   type EmbeddingProvider,
   FixedClock,
   type Logger,
@@ -58,13 +63,16 @@ import {
   type OrganizationReader,
   type OutboxGateway,
   type PartitionArchiveGateway,
+  type PresenceReader,
   type Principal,
+  type PushSender,
   type QueuePublisher,
   type RateLimitStore,
   type RealtimePublisher,
   type RealtimeSubscriber,
   type RelayedActivityStore,
   SERVER_CATALOG,
+  type SecretCipher,
   type SessionGateway,
   type SessionResolver,
   type ShardAssignmentRepository,
@@ -103,6 +111,10 @@ export interface TestPorts {
   readonly logs: LogReader;
   readonly mailPublisher: MailPublisher;
   readonly mailRenderer: MailRenderer;
+  readonly emailSenders: EmailSenderResolver;
+  readonly secretCipher: SecretCipher;
+  readonly pushSender: PushSender;
+  readonly presence: PresenceReader;
   readonly markdownRenderer: MarkdownRenderer;
   readonly maintenance: MaintenanceGateway;
   readonly organizations: OrganizationReader;
@@ -174,6 +186,10 @@ export class TestContainer {
       logs: overrides.logs ?? new InMemoryLogReader(),
       mailPublisher: overrides.mailPublisher ?? new RecordingMailPublisher(),
       mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
+      emailSenders: overrides.emailSenders ?? new StubEmailSenderResolver(),
+      secretCipher: overrides.secretCipher ?? new StubSecretCipher(),
+      pushSender: overrides.pushSender ?? new RecordingPushSender(),
+      presence: overrides.presence ?? new InMemoryPresenceReader(),
       markdownRenderer: overrides.markdownRenderer ?? new StubMarkdownRenderer(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       organizations: overrides.organizations ?? new InMemoryOrganizationReader(),

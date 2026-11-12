@@ -47,8 +47,27 @@ export const notification = {
   "notification.preference.category.messaging": "Messages",
   "notification.preference.channel.in_app": "In the app",
   "notification.preference.channel.email": "By email",
+  "notification.preference.channel.push": "On this device",
+  "notification.push.title": "Push on this device",
+  "notification.push.description":
+    "Alerts from this browser, even with the tab closed. Turn it on in each browser you use.",
+  "notification.push.enable": "Turn on push",
+  "notification.push.disable": "Turn off push",
+  "notification.push.on": "Push is on for this browser.",
+  "notification.push.unsupported": "This browser cannot receive push notifications.",
+  "notification.push.denied":
+    "Push was not allowed. Allow notifications for this site in the browser, then try again.",
   "notification.preference.mode.immediate": "Straight away",
   "notification.preference.mode.digest": "Once a day",
   "notification.preference.mode.off": "Off",
   "notification.preference.saved": "Saved.",
+  // ── the digest hour (`26.7`) ──
+  "notification.digestHour.title": "Daily digest",
+  "notification.digestHour.label": "Send the organization's digest at",
+  "notification.digestHour.hint": "In UTC. Everyone in this organization gets theirs at this hour.",
+  "notification.digestHour.readOnly": "This organization's daily digest goes out at {time}.",
+  // A grouped item, beside its title: one bell item for several events (`26.7`).
+  "notification.grouped": "{count} new",
+  "notification.kind.message.mentioned.title": "You were mentioned",
+  "notification.kind.message.mentioned.body": "Someone mentioned you in a conversation.",
 } as const;

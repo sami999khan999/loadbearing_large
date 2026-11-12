@@ -1,6 +1,7 @@
 import {
   type ConversationId,
   index,
+  integer,
   type MessageId,
   type OrganizationId,
   pgTable,
@@ -108,6 +109,10 @@ export const messages = pgTable(
     // Soft: the row keeps its place so the conversation keeps its shape and the keyset
     // cursor over it stays stable. The body is blanked, not the row.
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // The root a reply answers (`26.1`), with the root's time as the partition hint: a
+    // partitioned table has no key on `id` alone, so the pair is the reference.
+    parentId: uuid("parent_id").$type<MessageId>(),
+    parentCreatedAt: timestamp("parent_created_at", { withTimezone: true, precision: 3 }),
     // Milliseconds, not the default microseconds: every caller hands this value back as a
     // predicate. See application/docs/reference/messaging.md.
     createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
@@ -123,5 +128,70 @@ export const messages = pgTable(
       t.id.desc(),
     ),
     index("messages_conversation_fk_idx").on(t.conversationId),
+    // A thread, oldest first, and each root's reply count: replies only, so it stays small.
+    index("messages_thread_idx")
+      .on(t.organizationId, t.conversationId, t.parentId, t.createdAt, t.id)
+      .where(sql`${t.parentId} is not null`),
+  ],
+);
+
+// One row per person, message and emoji (`26.1`). `created_at` is the **message's** time,
+// so a reaction is in its message's month and a page reads both from the same months.
+export const messageReactions = pgTable(
+  "message_reactions",
+  {
+    // Its own id, as every partitioned table has: the move and the export page by it.
+    id: uuid("id").notNull(),
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
+    messageId: uuid("message_id").$type<MessageId>().notNull(),
+    userId: uuid("user_id").$type<UserId>().notNull(),
+    emoji: text("emoji").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.id, t.organizationId, t.createdAt] }),
+    // One per person, message and emoji: what makes adding a reaction twice a no-op.
+    uniqueIndex("message_reactions_once_uq").on(
+      t.organizationId,
+      t.messageId,
+      t.userId,
+      t.emoji,
+      t.createdAt,
+    ),
+    index("message_reactions_page_idx").on(
+      t.organizationId,
+      t.conversationId,
+      t.createdAt,
+      t.messageId,
+    ),
+    index("message_reactions_user_fk_idx").on(t.organizationId, t.userId),
+  ],
+);
+
+// A message's files (`26.1`): the row names the upload, and storage holds the bytes under
+// `msg/<tenant>/<room>/<uploader>/<id>`. `created_at` is the message's time, as for reactions.
+export const messageAttachments = pgTable(
+  "message_attachments",
+  {
+    id: uuid("id").notNull(),
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
+    messageId: uuid("message_id").$type<MessageId>().notNull(),
+    uploaderId: uuid("uploader_id").$type<UserId>().notNull(),
+    name: text("name").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.id, t.organizationId, t.createdAt] }),
+    index("message_attachments_page_idx").on(
+      t.organizationId,
+      t.conversationId,
+      t.createdAt,
+      t.messageId,
+    ),
+    index("message_attachments_uploader_fk_idx").on(t.organizationId, t.uploaderId),
   ],
 );

@@ -1,4 +1,11 @@
-import type { ConversationId, MessageId, OrganizationId, UserId } from "../import.js";
+import type {
+  ConversationId,
+  MessageAttachmentDto,
+  MessageEmoji,
+  MessageId,
+  OrganizationId,
+  UserId,
+} from "../import.js";
 
 export interface MessageRecord {
   readonly id: MessageId;
@@ -9,6 +16,25 @@ export interface MessageRecord {
   readonly deleted: boolean;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
+  // Attached by the list (`26.1`); a message just sent or edited carries none.
+  readonly reactions?: readonly ReactionSummary[];
+  // Attached by the list and by a send (`26.1`); none on an edit's answer.
+  readonly attachments?: readonly MessageAttachmentDto[];
+  // The root this replies to, or null for a message in the room itself (`26.1`).
+  readonly parentId: MessageId | null;
+  // Attached by the list to a root; absent elsewhere, which the wire reads as zero.
+  readonly replyCount?: number;
+}
+
+export interface ThreadPageResult {
+  readonly items: readonly MessageRecord[];
+  readonly newerCursor: string | null;
+}
+
+export interface ReactionSummary {
+  readonly emoji: MessageEmoji;
+  readonly count: number;
+  readonly mine: boolean;
 }
 
 export interface MessagePageResult {
@@ -34,6 +60,9 @@ export interface NewMessage {
   readonly authorId: UserId;
   readonly clientId: string;
   readonly body: string;
+  // A reply's root and its time; both absent for a message in the room itself.
+  readonly parentId?: MessageId | null;
+  readonly parentCreatedAt?: Date | null;
 }
 
 export interface UnreadCount {
@@ -42,7 +71,25 @@ export interface UnreadCount {
 }
 
 export abstract class MessageRepository {
-  // Pages backwards from the newest, which is the direction a conversation is read.
+  // One thread, oldest first from its root's time (`26.1`): replies are never older.
+  public abstract listReplies(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    parentId: MessageId,
+    parentCreatedAt: Date,
+    limit: number,
+    after: string | null,
+  ): Promise<ThreadPageResult>;
+
+  // Each root's reply count, in one grouped query from the oldest root's time.
+  public abstract replyCounts(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    parentIds: readonly MessageId[],
+    from: Date,
+  ): Promise<ReadonlyMap<MessageId, number>>;
+
+  // Pages backwards from the newest, top-level messages only: replies live in threads.
   public abstract list(
     organizationId: OrganizationId,
     query: MessageQuery,

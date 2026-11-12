@@ -49,6 +49,31 @@ export class NotificationProcedures {
 
   // The object the merge point in `procedure/index.ts` mounts. One place to add a
   // procedure to, rather than two.
+  public static readonly digestHour = oc
+    .route({ method: "GET", path: "/notifications/digest-hour" })
+    .output(NotificationContract.digestHour);
+
+  public static readonly updateDigestHour = oc
+    .route({ method: "PUT", path: "/notifications/digest-hour" })
+    .input(NotificationContract.digestHour)
+    .output(NotificationContract.digestHour);
+
+  // The VAPID public key a browser subscribes with (`26.3`).
+  public static readonly pushKey = oc
+    .route({ method: "GET", path: "/notifications/push/key" })
+    .output(NotificationContract.pushKey);
+
+  // This device, for the signed-in person in the active tenant. Saving one twice is one row.
+  public static readonly pushSubscribe = oc
+    .route({ method: "POST", path: "/notifications/push/subscriptions" })
+    .input(NotificationContract.pushSubscription)
+    .output(Envelope.acknowledged);
+
+  public static readonly pushUnsubscribe = oc
+    .route({ method: "POST", path: "/notifications/push/subscriptions/remove" })
+    .input(NotificationContract.pushEndpoint)
+    .output(Envelope.acknowledged);
+
   public static readonly all = {
     list: NotificationProcedures.list,
     archived: NotificationProcedures.archived,
@@ -58,5 +83,10 @@ export class NotificationProcedures {
     markAllRead: NotificationProcedures.markAllRead,
     preferences: NotificationProcedures.preferences,
     updatePreference: NotificationProcedures.updatePreference,
+    digestHour: NotificationProcedures.digestHour,
+    updateDigestHour: NotificationProcedures.updateDigestHour,
+    pushKey: NotificationProcedures.pushKey,
+    pushSubscribe: NotificationProcedures.pushSubscribe,
+    pushUnsubscribe: NotificationProcedures.pushUnsubscribe,
   } as const;
 }

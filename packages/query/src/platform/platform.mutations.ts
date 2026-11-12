@@ -10,6 +10,7 @@ import type {
   ExportRequestedDto,
   FlagTargetToggleInput,
   FlagToggleInput,
+  MailSettingsDto,
   ModuleSwitchUpdateInput,
   MoveRequestedDto,
   PlanAssignInput,
@@ -25,6 +26,7 @@ import type {
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,
+  SaveMailSettingsInput,
   TenantDeleteInput,
   TenantExportDayInput,
   TenantExportImageDto,
@@ -41,6 +43,24 @@ import { useAppMutation } from "../runtime/index.js";
 
 export class PlatformMutations {
   private constructor() {}
+
+  // The view comes back without the password, which a client never holds (`26.11`).
+  public static useSaveMailSettings(client: ApiClient) {
+    return useAppMutation<NonNullable<MailSettingsDto["settings"]>, SaveMailSettingsInput>({
+      mutationFn: (input) => client.platform.saveMailSettings(input),
+      invalidates: [QueryKeys.platform.all()],
+    });
+  }
+
+  public static useRemoveMailSettings(client: ApiClient) {
+    return useAppMutation<
+      { ok: true },
+      { organizationId: SaveMailSettingsInput["organizationId"] }
+    >({
+      mutationFn: (input) => client.platform.removeMailSettings(input),
+      invalidates: [QueryKeys.platform.all()],
+    });
+  }
 
   // No optimistic update: the refetched list carries what the bucket and ClickHouse
   // *now* hold, and an optimistic row would hide the drift the save may have caused.

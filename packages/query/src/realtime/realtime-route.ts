@@ -45,6 +45,12 @@ export class RealtimeRoutes {
     for (const route of Object.values(RealtimeRoutes.TABLE)) route(request, {});
   }
 
+  // The routes of the frames published with `replay: false`, which a resume cannot hand
+  // back: on every reopen they are refetched whole instead.
+  public static reopened(request: Request): void {
+    RealtimeRoutes.TABLE["conversation.changed"](request, {});
+  }
+
   public static names(): readonly RealtimeEventName[] {
     return Object.keys(RealtimeRoutes.TABLE) as readonly RealtimeEventName[];
   }

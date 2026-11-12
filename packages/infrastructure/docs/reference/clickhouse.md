@@ -93,6 +93,10 @@ hand-run backfills that are not replays.
 
 ## The projection, and why it reads its own checkpoint
 
+Two tables are projected: `activity_events` from `activity_log`, drawn below, and
+`ai_usage_events` from `ai_usage`, built the same way by `ClickHouseAssistantUsageProjector`. The
+second has its own reader, `ClickHouseAssistantUsageReader`, for the platform's AI usage report.
+
 ```
 activity_log ──► PgActivityReplayReader ──► ClickHouseAnalyticsProjector ──► activity_events
   (Postgres,          keyset on                ReplacingMergeTree               (derived)

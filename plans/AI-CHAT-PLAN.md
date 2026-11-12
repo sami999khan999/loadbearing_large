@@ -1,6 +1,6 @@
 ---
 title: AI assistant plan — ask OpenAI, OpenRouter or Gemini about permitted data, sized for 100K concurrent users
-updated: 2026-10-19
+updated: 2026-11-10
 owner: sami
 schema: plan/v1
 source: owner request 2026-10-10; three read-only surveys (AI and docs search, streaming and scale seams, worker and platform admin); the owner chose large first, then a simpler port to lite; checked against the open backlog the same day
@@ -168,7 +168,14 @@ the word. Every name below is `assistant`.
   - The web `assistant.router.ts`, and `assistant.stream` in `api-server/src/router/` beside
     `realtime.router.ts`.
   - The worker `assistant.consumer.ts` with a BullMQ limiter.
-- **6, usage reporting (large only):**
+- **6, usage reporting (large only)** — **done 2026-11-10.** ClickHouse migration
+  `0001_ai_usage_events`, projected inside the existing five-minute `project` run; the
+  **AI usage** panel on `/platform/analytics` (`platform.assistantUsage`); and a meter on
+  `/assistant` (`assistant.usage`) for the new key `ai.usage.read`, granted to `admin` by the seed
+  and by migration `0058`. **Tokens only, no cost:** nothing in the kit knows a model's price, so
+  pricing is an owner decision. Checked live: carol's fake answer metered 62 + 11 tokens, the
+  projection copied every `ai_usage` row, and the real reader returned them. The platform panel
+  server-renders its rows for alice and refuses bob with `FORBIDDEN`, checked over HTTP.
   - Project `ai_usage` into ClickHouse beside `clickhouse-analytics.projector.ts`.
   - A platform **AI usage** panel on the analytics page: tokens and cost by organization, model and
     day.
@@ -176,8 +183,8 @@ the word. Every name below is `assistant`.
 - **7, client and UI** — **built 2026-10-19; not walked in a browser yet.** `/assistant` and
   `/assistant/$threadId`, the nav entry with its own `sparkle` icon, English and Bengali copy.
   `RealtimeStream.run` took `resumesFrom` and `endsWith`, so an answer resumes from any frame and
-  stops at `done`. **Answers render as plain text with their line breaks**, not as Markdown: the
-  client has no Markdown renderer, and adding one is a dependency decision left open. Checked
+  stops at `done`. **Answers render as Markdown** since 2026-11-11 (owner's call): `MarkdownText` in
+  `ui`, `react-markdown` with GFM and `rehype-sanitize`, code-split with the assistant pages. Checked
   over HTTP against `pnpm dev`: both pages server-render for a plain member, a question answers
   through the worker, its stream ends in one `done`, and doc sources link into `/doc`:
   - `api-client`, plus `query/src/assistant/` with a `useAssistantStream` hook on
@@ -187,7 +194,11 @@ the word. Every name below is `assistant`.
     queued, interrupted and failed states.
   - The route `_authenticated/assistant/`. The menu label is "Assistant", with its own icon rather
     than Messaging's `chat` icon.
-- **8, docs:**
+- **8, docs** — **done 2026-11-10.** The references already covered the flow, permissions,
+  re-checks and what reaches the provider; they gained the spend views. There is no
+  `docs/scale/` in this kit, so the scale section is "Scaling the assistant" in
+  `docs/infra/deployment.md`, with the measured numbers. `pnpm assistant:load` is the script, and
+  `ASSISTANT_FAKE_DELAY_MS` gives the fake answer a real one's duration:
   - An assistant reference covering the flow, permissions, source re-checks, and what is sent to
     the provider.
   - A `docs/scale/` assistant section.

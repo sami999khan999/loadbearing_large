@@ -60,7 +60,8 @@ the model and the status, and never the vendor's message, which may echo the pro
 
 `CannedAssistantModel` answers the last question with a fixed sentence, word by word, with usage
 and a stop, and calls nobody. It is for local work without a key and for the load test, where an
-optional delay between words gives a stream its shape. It is never a quality signal.
+optional delay between words, `ASSISTANT_FAKE_DELAY_MS` on the worker, gives a stream its shape.
+It is never a quality signal.
 
 ## The answer stream in Redis
 

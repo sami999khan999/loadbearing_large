@@ -51,6 +51,7 @@ export class QueryKeys {
     lists: () => ["assistant", "list"] as const,
     list: (params: unknown) => ["assistant", "list", params] as const,
     get: (threadId: string) => ["assistant", "get", threadId] as const,
+    usage: () => ["assistant", "usage"] as const,
   };
 
   public static readonly widget = {
@@ -72,6 +73,10 @@ export class QueryKeys {
     // every page and the list on one, so they cannot share a lifetime.
     unreadCount: () => ["notification", "unreadCount"] as const,
     preferences: () => ["notification", "preferences"] as const,
+    digestHour: () => ["notification", "digest-hour"] as const,
+    pushKey: () => ["notification", "push", "key"] as const,
+    // This browser's own subscription, read from the browser rather than the server.
+    pushDevice: () => ["notification", "push", "device"] as const,
   };
 
   // Two namespaces rather than one: a conversation list and the messages inside one
@@ -81,6 +86,7 @@ export class QueryKeys {
     list: (params: unknown) => ["conversation", "list", params] as const,
     lists: () => ["conversation", "list"] as const,
     get: (conversationId: string) => ["conversation", "get", conversationId] as const,
+    presence: (conversationId: string) => ["conversation", "presence", conversationId] as const,
   };
 
   public static readonly message = {
@@ -88,6 +94,8 @@ export class QueryKeys {
     // The cursor is not in the key, as everywhere else: it lives in the page data, and a
     // key that carried it would make every page a separate entry nothing invalidates.
     list: (conversationId: string) => ["message", "list", conversationId] as const,
+    // Under `message`, so a frame that invalidates the room's messages reaches its threads.
+    thread: (messageId: string) => ["message", "thread", messageId] as const,
   };
 
   // Above the tenant, so nothing here is keyed by organization: switching tenants
@@ -101,7 +109,11 @@ export class QueryKeys {
     retentionPreview: (table: string, months: number, organizationId?: string) =>
       ["platform", "retention", "preview", table, months, organizationId ?? null] as const,
     storage: (params: unknown) => ["platform", "storage", params] as const,
+    mailDeliveries: (params: unknown) => ["platform", "mail", "deliveries", params] as const,
+    mailSettings: (organizationId: string) =>
+      ["platform", "mail", "settings", organizationId] as const,
     projection: () => ["platform", "projection"] as const,
+    assistantUsage: (days: number) => ["platform", "assistant-usage", days] as const,
     policy: () => ["platform", "policy"] as const,
     gaps: () => ["platform", "projection", "gap"] as const,
     exports: (organizationId: string) => ["platform", "export", organizationId] as const,

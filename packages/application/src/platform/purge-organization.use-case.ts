@@ -1,6 +1,8 @@
 import { IndexTextStage } from "../ai/index.js";
+import type { AssistantUsageProjector } from "../assistant/index.js";
 import { DocImageKey, type DocImageSweep } from "../doc/index.js";
 import { CapabilitySet, type OrganizationId, type UserId } from "../import.js";
+import { MessageAttachmentKey } from "../messaging/index.js";
 import type {
   ActivityLogger,
   AnalyticsProjector,
@@ -54,6 +56,8 @@ export class PurgeOrganizationUseCase {
     // The tenant's doc images. Their prefix is the only index they have, so no partition
     // drop reaches them and nothing else would ever delete them.
     private readonly images: DocImageSweep | null = null,
+    // The derived copy of `ai_usage`, beside the activity one and absent with it.
+    private readonly usageProjector: AssistantUsageProjector | null = null,
   ) {}
 
   public async execute(input: PurgeOrganizationInput): Promise<PurgedOrganization> {
@@ -75,6 +79,8 @@ export class PurgeOrganizationUseCase {
     // The same prefix walk for index text a job has not consumed yet, which nothing else
     // would delete until the nightly sweep a week later.
     await this.images?.sweep(IndexTextStage.tenantPrefix(input.organizationId));
+    // And message attachments (`26.1`), whose prefix is their only index too.
+    await this.images?.sweep(MessageAttachmentKey.tenantPrefix(input.organizationId));
 
     // `system`, and with no capabilities: this actor authorizes nothing, it only names
     // who asked. The permission was asserted when the job was queued.
@@ -112,6 +118,7 @@ export class PurgeOrganizationUseCase {
     // cache does not, because Redis answers without the join until the TTL expires.
     await this.shards.invalidate(Shard.keyOf(input.organizationId));
     await this.projector?.deleteTenant(input.organizationId);
+    await this.usageProjector?.deleteTenant(input.organizationId);
 
     return { archived, partitions: partitions.length, outboxRows };
   }

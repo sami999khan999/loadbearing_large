@@ -23,6 +23,7 @@ export {
 } from "./cold-archive.reader.js";
 export { DomainEventPublisher } from "./domain-event.publisher.js";
 export { type EmailMessage, type EmailReceipt, EmailSender } from "./email.sender.js";
+export { EmailSenderResolver } from "./email-sender.resolver.js";
 export { EmbeddingProvider, type EmbeddingPurpose } from "./embedding.provider.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";
 export { MailPublisher, type MailRequest } from "./mail.publisher.js";
@@ -51,11 +52,14 @@ export {
   type RestoredMonth,
   type TenantExport,
 } from "./partition-archive.gateway.js";
+export { PresenceReader } from "./presence.reader.js";
+export { type PushPayload, PushSender, type PushTarget } from "./push.sender.js";
 export { type JobOptions, type QueuedJob, QueuePublisher } from "./queue.publisher.js";
 export { RateLimitStore } from "./rate-limit.store.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
 export { RealtimeSubscriber, type SubscribeOptions } from "./realtime.subscriber.js";
 export { type RelayedActivity, RelayedActivityStore } from "./relayed-activity.store.js";
+export { SecretCipher } from "./secret.cipher.js";
 export { SessionGateway } from "./session.gateway.js";
 export {
   type RequestHeaders,

@@ -368,6 +368,45 @@ backlog in one queue is a second service, not more copies of everything:
 Every queue must be served by at least one service — a queue nobody serves fills silently. See
 [the supervisor](../../apps/worker/docs/reference/supervisor.md).
 
+### Scaling the assistant
+
+An answer is slow I/O, not CPU: a worker waits on the provider while it streams. So one worker
+process holds **`WORKER_ASSISTANT_CONCURRENCY` answers at once** (32 by default), and its
+throughput is that number divided by how long an answer takes. Past it, questions wait in the
+`assistant` queue. They are not refused.
+
+`pnpm assistant:load` measures it. Run it against `ASSISTANT_PROVIDER=fake`, with
+`ASSISTANT_FAKE_DELAY_MS` set so a fake answer takes as long as a real one. Measured 2026-11-10 on
+one 4-core, 16 GB laptop, with `pnpm dev`, every container and the load generator on the same
+machine. Each row is 240 questions from 60 users, and every answer was about three seconds of
+streaming:
+
+| Answers at once | Answers a second | Send p95 | First word p50 / p95 | Finished p50 / p95 | Failed |
+|---|---|---|---|---|---|
+| 10 | 3.3 | 293 ms | 448 / 864 ms | 2.9 / 3.6 s | 0 |
+| 30 | 9.2 | 873 ms | 490 / 1 656 ms | 3.0 / 4.3 s | 0 |
+| 60 | 10.3 | 635 ms | 2.9 / 4.0 s | 5.4 / 6.5 s | 0 |
+
+**The ceiling is the lane, as designed.** At 60 the worker's 32 slots are full: throughput stops
+at about 32 ÷ 3 s, and the excess shows as time to the first word, which is queue wait. One web
+process and one realtime process carried 60 open streams without an error. Read the numbers as a
+shape, not a capacity: development mode, one machine, and a provider that never slows down.
+
+For the plan's 100K users (`plans/AI-CHAT-PLAN.md`: about 5K answers at once, a 10K peak):
+
+| Bottleneck | What moves it |
+|---|---|
+| Answers at once | More slots in a process (`WORKER_ASSISTANT_CONCURRENCY`), then more worker services with `WORKER_QUEUES=assistant`. About 160 processes at 32 slots each hold 5K. The platform Workers page autoscales a lane between its min and max |
+| The provider | `WORKER_ASSISTANT_RATE_PER_MINUTE` caps what is sent; OpenRouter or several keys spread it. The provider contract is the real ceiling, and nothing here raises it |
+| Open streams | More `apps/realtime` replicas behind the proxy. A stream is open only while its answer is |
+| Redis fan-out | `REDIS_ASSISTANT_URL` on its own instance. Keys carry hash tags, so Redis Cluster is an adapter change |
+| One person, or one tenant | `ASSISTANT_ACTIVE_PER_USER`, `assistant.send`'s 20 a minute, and `ASSISTANT_ORG_DAILY_TOKENS` |
+
+**The script signs in one user per two answers you ask for**, because a person may run two answers
+at once and send 20 questions a minute. It signs up `load-<n>@example.test` through Mailpit the
+first time, at the auth limit of five sign-ups a minute, and keeps their sessions in the temp
+directory for the next run.
+
 ---
 
 ## Phase 2 — managed services, in risk order

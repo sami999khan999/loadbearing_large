@@ -30,4 +30,11 @@ export const notificationPermissions = {
     module: "notification",
     label: "Change your notification preferences",
   },
+  // The hour the tenant's daily digest goes out (`26.7`). An administrator's call: it is
+  // when every member's inbox is written to.
+  "notification.digest.manage": {
+    scope: "org",
+    module: "notification",
+    label: "Change the digest hour",
+  },
 } as const satisfies Record<string, PermissionMeta>;

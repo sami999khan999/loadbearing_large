@@ -14,12 +14,21 @@ export {
 export { ConversationEntity } from "./conversation.entity.js";
 export { ConversationProcedures } from "./conversation.procedures.js";
 export {
+  type AttachmentLinkInput,
+  type AttachmentUploadDto,
   type DeleteMessageInput,
   type EditMessageInput,
   type ListMessagesInput,
+  type ListThreadInput,
+  type MessageAttachmentDto,
+  type MessageAttachmentType,
   MessageContract,
   type MessageDto,
+  type MessageEmoji,
   type MessagePage,
+  type MessageThreadPage,
+  type ReactToMessageInput,
+  type RequestAttachmentUploadInput,
   type SendMessageInput,
   type TypingInput,
 } from "./message.contract.js";

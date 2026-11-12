@@ -2,6 +2,8 @@ const ACTIVITY_LOG = "activity_log";
 const OUTBOX_EVENT = "outbox_event";
 const NOTIFICATIONS = "notifications";
 const MESSAGES = "messages";
+const MESSAGE_REACTIONS = "message_reactions";
+const MESSAGE_ATTACHMENTS = "message_attachments";
 const CONVERSATIONS = "conversations";
 const CONVERSATION_MEMBERS = "conversation_members";
 const NOTIFICATION_PREFERENCES = "notification_preferences";
@@ -14,6 +16,8 @@ const DOC_SECTIONS = "doc_sections";
 const ASSISTANT_THREADS = "assistant_threads";
 const ASSISTANT_MESSAGES = "assistant_messages";
 const AI_USAGE = "ai_usage";
+const MAIL_DELIVERY = "mail_delivery";
+const PUSH_SUBSCRIPTIONS = "push_subscriptions";
 
 // The column the table is ranged by. A closed union rather than `string`: it is inlined
 // into DDL and into every predicate that wants a partition pruned.
@@ -84,6 +88,20 @@ const ALL = Object.freeze([
     column: "created_at",
     retentionMonths: null,
   }),
+  // A message's reactions (`26.1`), in its month, kept as long as the message is: D47.
+  Object.freeze({
+    name: MESSAGE_REACTIONS,
+    tenantKey: "organization_id",
+    column: "created_at",
+    retentionMonths: null,
+  }),
+  // And its files' rows, the same way. The bytes are in storage under `msg/`.
+  Object.freeze({
+    name: MESSAGE_ATTACHMENTS,
+    tenantKey: "organization_id",
+    column: "created_at",
+    retentionMonths: null,
+  }),
   Object.freeze({
     name: NOTIFICATION_PREFERENCES,
     tenantKey: "organization_id",
@@ -145,6 +163,21 @@ const ALL = Object.freeze([
     column: "created_at",
     retentionMonths: 12,
   }),
+  // Every send and every final failure (`26.10`). It grows with mail, and a year and a month
+  // answers "was this sent" for anything a person still remembers asking about.
+  Object.freeze({
+    name: MAIL_DELIVERY,
+    tenantKey: "organization_id",
+    column: "created_at",
+    retentionMonths: 13,
+  }),
+  // A browser per person (`26.3`): it grows with the tenant's devices, never with the calendar.
+  Object.freeze({
+    name: PUSH_SUBSCRIPTIONS,
+    tenantKey: "organization_id",
+    column: null,
+    retentionMonths: null,
+  }),
   Object.freeze({
     name: AI_USAGE,
     tenantKey: "organization_id",
@@ -185,6 +218,8 @@ export class PartitionedTable {
   public static readonly OUTBOX_EVENT = OUTBOX_EVENT;
   public static readonly NOTIFICATIONS = NOTIFICATIONS;
   public static readonly MESSAGES = MESSAGES;
+  public static readonly MESSAGE_REACTIONS = MESSAGE_REACTIONS;
+  public static readonly MESSAGE_ATTACHMENTS = MESSAGE_ATTACHMENTS;
   public static readonly CONVERSATIONS = CONVERSATIONS;
   public static readonly CONVERSATION_MEMBERS = CONVERSATION_MEMBERS;
   public static readonly NOTIFICATION_PREFERENCES = NOTIFICATION_PREFERENCES;
@@ -197,6 +232,8 @@ export class PartitionedTable {
   public static readonly ASSISTANT_THREADS = ASSISTANT_THREADS;
   public static readonly ASSISTANT_MESSAGES = ASSISTANT_MESSAGES;
   public static readonly AI_USAGE = AI_USAGE;
+  public static readonly MAIL_DELIVERY = MAIL_DELIVERY;
+  public static readonly PUSH_SUBSCRIPTIONS = PUSH_SUBSCRIPTIONS;
 
   public static readonly ALL = ALL;
 

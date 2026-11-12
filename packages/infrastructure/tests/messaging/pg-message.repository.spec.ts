@@ -244,3 +244,54 @@ describe("PgMessageRepository.unreadCounts", () => {
     expect((await repository.unreadCounts(organizationId, reader, [quiet]))[0]?.count).toBe(1);
   });
 });
+
+// `26.1`: a reply is read in its thread, never on the room's own page, and counted there.
+describe("PgMessageRepository, threads", () => {
+  it("keeps replies off the room's page, reads them oldest first, and counts the live ones", async () => {
+    const root = await send(quiet, author, "root");
+    const reply = (body: string) =>
+      repository.save({
+        id: Uuid.v7() as MessageId,
+        createdAt: new Date(),
+        organizationId,
+        conversationId: quiet,
+        authorId: reader,
+        clientId: Uuid.v7(),
+        body,
+        parentId: root.id,
+        parentCreatedAt: root.createdAt,
+      });
+    const first = await reply("one");
+    const second = await reply("two");
+    const gone = await reply("three");
+    await repository.softDelete(organizationId, gone.id, gone.createdAt, new Date());
+
+    const page = await repository.list(organizationId, { conversationId: quiet, limit: 50 });
+    expect(page.items.map((item) => item.id)).not.toContain(first.id);
+
+    const head = await repository.listReplies(
+      organizationId,
+      quiet,
+      root.id,
+      root.createdAt,
+      2,
+      null,
+    );
+    expect(head.items.map((item) => item.body)).toEqual(["one", "two"]);
+    expect(head.items[0]?.parentId).toBe(root.id);
+    const tail = await repository.listReplies(
+      organizationId,
+      quiet,
+      root.id,
+      root.createdAt,
+      2,
+      head.newerCursor,
+    );
+    expect(tail.items.map((item) => item.id)).toEqual([gone.id]);
+    expect(tail.newerCursor).toBeNull();
+
+    const counts = await repository.replyCounts(organizationId, quiet, [root.id], root.createdAt);
+    expect(counts.get(root.id)).toBe(2);
+    expect(second.parentId).toBe(root.id);
+  });
+});

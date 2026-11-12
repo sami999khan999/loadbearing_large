@@ -15,6 +15,9 @@ const TITLE_MAX = 120;
 const MEMBERS_MAX = 100;
 
 export class ConversationContract {
+  // The members who have the app open now (`26.6`). Ids only: names come from the roster.
+  public static readonly presence = z.object({ online: z.array(z.uuid()).readonly() });
+
   private constructor() {}
 
   public static readonly kind = kind;

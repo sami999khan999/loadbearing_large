@@ -5,6 +5,7 @@ import {
   MessageComposer,
   MessageList,
   MessagingQueries,
+  PresenceNotice,
   TypingNotice,
   useApiClient,
   useAppQuery,
@@ -54,13 +55,18 @@ function Conversation() {
   );
 
   const nameFor = (userId: string) => entity?.nameOf(userId) ?? null;
+  const mentionable = (entity?.othersThan(user?.id ?? "") ?? []).map((member) => ({
+    userId: member.userId,
+    name: member.name,
+  }));
 
   return (
     <main>
       <h1>{entity?.displayTitle(user?.id ?? "") ?? t("messaging.inbox.title")}</h1>
-      <MessageList conversationId={conversationId} nameFor={nameFor} />
+      <PresenceNotice conversationId={conversationId} nameFor={nameFor} selfId={user?.id} />
+      <MessageList conversationId={conversationId} nameFor={nameFor} mentionable={mentionable} />
       <TypingNotice typing={typing} nameFor={nameFor} />
-      <MessageComposer conversationId={conversationId} />
+      <MessageComposer conversationId={conversationId} mentionable={mentionable} />
     </main>
   );
 }

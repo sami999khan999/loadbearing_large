@@ -30,6 +30,7 @@ export {
   type AssistantThreadListProps,
   AssistantThreadPanel,
   type AssistantThreadPanelProps,
+  AssistantUsagePanel,
 } from "./assistant/index.js";
 export {
   ForgotPasswordForm,
@@ -108,6 +109,8 @@ export {
   type MessageComposerProps,
   MessageList,
   type MessageListProps,
+  PresenceNotice,
+  type PresenceNoticeProps,
   TypingNotice,
   type TypingNoticeProps,
 } from "./messaging/index.js";
@@ -115,6 +118,8 @@ export { ModuleNav, type ModuleNavProps } from "./nav/index.js";
 export {
   ArchivedNotificationList,
   type ArchivedNotificationListProps,
+  DigestHourForm,
+  type DigestHourFormProps,
   NotificationBell,
   type NotificationBellProps,
   NotificationList,
@@ -122,6 +127,7 @@ export {
   NotificationPeek,
   type NotificationPeekProps,
   NotificationPreferenceForm,
+  PushDeviceForm,
 } from "./notification/index.js";
 export {
   CreateOrganizationForm,
@@ -134,8 +140,13 @@ export {
 } from "./organization/index.js";
 export {
   AccountPanel,
+  AssistantUsageReportPanel,
   DeleteTenantPanel,
   FlagList,
+  MailDeliveryList,
+  type MailDeliveryListProps,
+  MailSettingsForm,
+  type MailSettingsFormProps,
   ModuleSwitchPanel,
   OrganizationEntitlementPanel,
   PlanForm,

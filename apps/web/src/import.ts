@@ -41,6 +41,10 @@ export type {
 // question of. The shapes a component renders arrive through `@loadbearing/query`.
 export { ConversationEntity, Identifiers } from "@loadbearing/contracts";
 
+// ── @loadbearing/errors ──────────────────────────────────────────────────────
+// `route/-loader-error.ts` only: a loader's `NOT_FOUND` becomes the router's not-found.
+export { ErrorNormalizer } from "@loadbearing/errors";
+
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
   AccountPanel,
@@ -51,6 +55,8 @@ export {
   AssistantQuestionForm,
   AssistantThreadList,
   AssistantThreadPanel,
+  AssistantUsagePanel,
+  AssistantUsageReportPanel,
   ChangeEmailForm,
   ChangePasswordForm,
   ConversationList,
@@ -60,6 +66,7 @@ export {
   DashboardZone,
   DeleteTenantPanel,
   DISMISSAL,
+  DigestHourForm,
   DocEditorForm,
   DocGrantPanel,
   DocNavTree,
@@ -78,6 +85,8 @@ export {
   InvitationList,
   InviteMemberForm,
   LinkedAccountList,
+  MailDeliveryList,
+  MailSettingsForm,
   MemberAccessPanel,
   MemberList,
   MessageComposer,
@@ -93,10 +102,12 @@ export {
   PlanList,
   PlatformNav,
   PlatformStatusPanel,
+  PresenceNotice,
   ProfileForm,
   ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
+  PushDeviceForm,
   prefetchDashboard,
   ReplicaSwitchPanel,
   ResetPasswordForm,

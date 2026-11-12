@@ -1,6 +1,7 @@
 import { SystemPrincipal, withShard } from "../bootstrap/index.js";
 import {
   type Container,
+  DigestHour,
   type Job,
   type OrganizationId,
   QueueName,
@@ -64,7 +65,9 @@ export class NotificationConsumer {
   // One job per tenant rather than one job doing every tenant: a digest that fails for
   // one organization must not stop the other four thousand.
   private async fanOut(): Promise<void> {
-    const day = NotificationConsumer.dayOf(this.container.clock.now());
+    const now = this.container.clock.now();
+    const day = NotificationConsumer.dayOf(now);
+    const hour = now.getUTCHours();
     let organizations = 0;
 
     // Each node's tenants from the catalog, a page at a time. The old question — which
@@ -73,7 +76,13 @@ export class NotificationConsumer {
       let after: OrganizationId | null = null;
 
       for (;;) {
-        const page = await this.container.organizations.page(after, TENANT_PAGE, node);
+        const page = await this.container.organizations.pageDueForDigest(
+          after,
+          TENANT_PAGE,
+          node,
+          hour,
+          DigestHour.DEFAULT,
+        );
         if (page.length === 0) break;
 
         // A tenant with nothing unread costs its digest job one pruned query and no mail.
@@ -97,7 +106,7 @@ export class NotificationConsumer {
       }
     });
 
-    this.container.logger.emit("notification.digest.completed", { organizations, day });
+    this.container.logger.emit("notification.digest.completed", { organizations, day, hour });
   }
 
   private async digest(data: DigestJobData): Promise<void> {

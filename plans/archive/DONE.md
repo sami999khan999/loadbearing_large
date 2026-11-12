@@ -1553,6 +1553,12 @@ in this file's history of `BACKLOG.md` §15.
 
 ## 19. Review of 2026-10-10 — closed so far
 
+- [x] `RW.3` **An archived `doc_revision` month makes its images look unlinked** `done: 2026-11-10`
+  — `DocImageOrphans` now streams the tenant's archived `doc_revision` months out of cold
+  storage and keeps every image they link. A month the index has forgotten has expired, so its
+  images may go with it. **Proof:** `doc-image-orphans.spec.ts` keeps an image only an archived
+  revision links and deletes one no month links; it fails on the old sweep.
+
 Eighteen findings from two reviews of the code both kits share, each checked against the code
 before it was fixed, and ported to lite. One more, a cross-site GET reaching an RPC mutation, was
 false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless told not to.
@@ -1945,10 +1951,103 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   `reembed` route, the full suite, boot smokes for all three apps, and on the local database an
   inserted pre-`0055` chunk adopted once and not again.
 
+- [x] `AI.3` **A loader's `NOT_FOUND` renders a 500** `done: 2026-11-10` — fixed once, where
+  loaders run: `apps/web/src/route/-loader-error.ts` gives every route in the tree an
+  `onError` that turns a normalized `NOT_FOUND` into the router's `notFound()`, so the root's
+  `NotFound` renders with a 404. A route's own `onError` wins. **Proof:** against `pnpm dev`,
+  signed in as carol, `/assistant/<unknown id>` and `/doc/nope/missing` answered 500 before and
+  404 after; `/assistant` and `/dashboard` stay 200. `/messages/<unknown id>` still answers 500,
+  because its procedure says `FORBIDDEN` rather than `NOT_FOUND`: that is `AI.4`.
+
+- [x] `AI.1` **Build [`AI-CHAT-PLAN.md`](../AI-CHAT-PLAN.md) — the AI Assistant** `done: 2026-11-10`
+  — every step of the plan is built: the model adapters, tables, use cases, Redis answer stream,
+  transport and lane (2026-10-14 to 10-19), the client and UI (10-19), usage reporting (11-10)
+  and the scale section with its load test (11-10). **Proof:** the full gates; the assistant
+  specs; a question answered through the worker and streamed through realtime; the usage meter and
+  the platform AI usage panel walked over HTTP; and `pnpm assistant:load` at 10, 30 and 60
+  answers at once with no failure, recorded in `docs/infra/deployment.md`. **Still open:** the
+  browser walk (`AI.2`), whether answers render Markdown, and the lite port.
+
+- [x] `AI.4` **A loader's `FORBIDDEN` renders a 500** `done: 2026-11-10` — not a gate that
+  disagrees with its procedure, as first written: messaging answers a conversation the reader is
+  not in, or one that does not exist, with `FORBIDDEN` by design. The loader hook from `AI.3` now
+  turns that refusal into the not-found page too, as the assistant does for another person's
+  thread. **Proof:** `apps/web/tests/route/loader-error.spec.ts`, and against a restarted
+  `pnpm dev` `/messages/<unknown id>` answered 404 where it answered 500.
+
+- [x] `RV.3` **Every fanned-out frame writes a replay log per member** `done: 2026-11-11` — the
+  owner chose to skip the log. An event frame may carry `replay: false`; `RedisRealtimePublisher`
+  publishes it without `XADD` or `EXPIRE`, `MessagingRealtimeSubscriber` marks each member's
+  `conversation.changed` with it, and the client never resumes from one. On each reopen of the
+  user stream it refetches the conversation lists (`RealtimeRoutes.reopened`). **Proof:** specs
+  in the subscriber (member frames unlogged, the room's logged), the publisher (no log commands)
+  and `RealtimeStream` (no resume from it, `onReopened` once per reopen).
+
+- [x] `26.10` **A delivery log** `done: 2026-11-11` — `mail_delivery`, partitioned and kept
+  thirteen months, written by `MailConsumer` after a send succeeds or its last attempt fails,
+  through `RecordMailDeliveryUseCase`; never read by the send path, and holding no params, so no
+  link or token. Tenantless mail is the platform organization's. Read on the platform **Mail**
+  page (`platform.mail.read`, `platform.mailDeliveries`), one tenant at a time and narrowed by
+  address. **Proof:** use-case, consumer and repository specs; against `pnpm dev` a sign-up's
+  verification mail appeared as `sent` with its server message id for alice.
+
+- [x] `26.11` **SMTP configurable from the dashboard** `done: 2026-11-11` — `mail_settings`, a
+  catalog row per organization: the platform organization's is the default, any other overrides
+  it. `auth.*` always uses the platform sender. Passwords are AES-256-GCM under `MAIL_SECRET_KEY`
+  behind `SecretCipher`, write-only, and absent from the audit row. `SmtpEmailSenderResolver`
+  keeps one pool per server. Edited on the platform **Mail** page (`platform.mail.manage`).
+  **Proof:** specs for the sender order, the save rules, the cipher and the resolver; against
+  `pnpm dev` alice saved a server for carol's org, the row held ciphertext only, and carol's
+  invitation arrived in Mailpit from that org's sender.
+
+- [x] `26.6` **A cluster-wide stream cap, and presence from open streams** `done: 2026-11-11` —
+  each stream holds a lease in a per-owner sorted set (`StreamLease`), renewed while open and
+  expiring after ninety seconds, so `REALTIME_MAX_STREAMS_PER_USER` holds across every realtime
+  process. Presence is "holds a live lease": `conversation.presence` for a conversation's
+  members, shown as "Online now" on the conversation page. **Proof:** lease and presence specs;
+  against `pnpm dev`, bob saw carol online while her stream was open and not after it closed.
+
+- [x] `26.7` **Per-tenant digest hour, channel mentions, grouping** `done: 2026-11-11` — the
+  digest hour (`notification_settings`, an hourly run, 07:00 UTC by default); the digest's lines
+  by kind and its opt-out link; grouping, a `count` on the one unread item per conversation,
+  counted once per event; and mentions: the composer inserts `<@id>`, the send carries up to
+  twenty ids, and delivery notifies the members among them as `message.mentioned`. **Proof:**
+  specs at every layer; against `pnpm dev`, a plain channel message notified nobody and a
+  mention of carol reached her inbox.
+
+- [x] `26.1` **Threads, reactions and attachments** `done: 2026-11-12` — reactions in
+  `message_reactions`, six emoji, summarised per page in one query; attachments as a signed
+  direct upload under `msg/<tenant>/<room>/<uploader>/`, checked at send, opened through a
+  five-minute link and swept on tenant delete; threads one level deep, a reply carrying its
+  root's `parent_id` and `parent_created_at`, kept off the room's page by a partial index and
+  counted per root in one query. **Proof:** specs at every layer; against `pnpm dev`, carol's
+  reply to bob's root showed as one reply on the root, read in its thread, and stayed off the room.
+
+- [x] `26.3` **Web push** `done: 2026-11-12` — whole: a `PushSender` port and a `web-push`
+  adapter, VAPID keys from `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` (all or none),
+  `push_subscriptions` partitioned by tenant, a service worker at `/push-worker`, and `push` as
+  a third channel in the grid at `immediate` or `off`, on by default for messages and off for
+  membership. The words are the kind's copy in the recipient's locale, never a message body; a
+  device the service retires (404/410) is deleted, and an event pushes once per device.
+  **Proof:** specs at every layer; against `pnpm dev`, carol subscribed, a digest push was
+  refused, a fresh mention claimed her device's push and the worker logged no error, and
+  unsubscribing removed the row. Not checked: a real browser receiving one.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | @sami | **`26.3` closed:** web push, a third channel |
+| 2026-11-12 | @sami | **`26.1` closed:** threads, the last of it |
+| 2026-11-11 | @sami | **`26.7` closed:** channel mentions, the last of it |
+| 2026-11-11 | @sami | **`26.6` closed:** stream leases hold the cap across processes, and give presence |
+| 2026-11-11 | @sami | **`26.11` closed:** per-tenant SMTP with a platform default, passwords encrypted |
+| 2026-11-11 | @sami | **`26.10` closed:** the mail delivery log and the platform Mail page |
+| 2026-11-11 | @sami | **`RV.3` closed:** per-member fan-out frames skip the replay log; a reopen refetches the lists |
+| 2026-11-10 | @sami | **`AI.4` closed:** a loader's `FORBIDDEN` renders the not-found page |
+| 2026-11-10 | @sami | **`RW.3` closed:** the image orphan sweep reads archived revisions too |
+| 2026-11-10 | @sami | **`AI.1` closed: the AI Assistant**, usage reporting and the load test last |
+| 2026-11-10 | @sami | **`AI.3` closed:** a loader's `NOT_FOUND` renders the not-found page with a 404, for every route at once |
 | 2026-10-10 | @sami | **`FC.16`–`FC.19`, from walking lite in a browser:** field errors for bad input, CSRF on server functions, and dev hydration after `start.ts` |
 | 2026-10-10 | @sami | **§20 closed in full: `FC.13`–`FC.15`, the security headers, the web connection budget and the https `AUTH_URL` rule, in both kits** |
 | 2026-10-10 | @sami | **§20, the final check: `FC.1`–`FC.6` and `FC.8`–`FC.10` fixed in both kits, `FC.7` checked and not a defect.** Lite also fixes its own `FC.11` and `FC.12`. `BACKLOG.md` §20 keeps three design items, `FC.13`–`FC.15` |

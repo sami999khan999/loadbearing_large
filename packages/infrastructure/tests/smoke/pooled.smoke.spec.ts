@@ -156,10 +156,9 @@ describe("the pooled connection path", () => {
         sql`select id from organizations limit 1`,
       )
     ).rows;
-    const [actor] = (
-      await pooled.database.client.execute<{ id: string }>(sql`select id from users limit 1`)
-    ).rows;
-    if (!org || !actor) throw new Error("run `pnpm db:seed` first");
+    // Any id: the outbox names no actor by foreign key, and the seed signs nobody up.
+    const actor = { id: crypto.randomUUID() };
+    if (!org) throw new Error("run `pnpm db:seed` first");
 
     const name = `probe.pooled.${Date.now()}`;
     for (let index = 0; index < 20; index += 1) {

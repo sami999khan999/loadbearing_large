@@ -111,11 +111,14 @@ export const coreEvents = {
   // carry. Without it a bounced invitation is a 200 and nothing else.
   "email.send.failed": { level: "error" },
 
-  // Together these are the delivery record, because there is no delivery table. `queued`
-  // and `sent` bracket a message; `failed` fires once, on the last attempt.
+  // Beside the delivery log (`26.10`), these bracket a message: `queued` and `sent`, and
+  // `failed` once, on the last attempt.
   "mail.delivery.queued": { level: "debug" },
   "mail.delivery.sent": { level: "info" },
   "mail.delivery.failed": { level: "error" },
+  // A saved mail server that cannot be used — no key, or a password it will not decrypt.
+  // Its mail goes out through the next sender instead (`26.11`).
+  "mail.settings.unusable": { level: "error" },
 
   // `lagged` is the one that matters: a drain that stops running is silent otherwise,
   // because "no events published" and "no events to publish" look identical.

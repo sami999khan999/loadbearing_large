@@ -1,9 +1,12 @@
 import {
+  check,
   index,
+  integer,
   jsonb,
   type OrganizationId,
   pgTable,
   primaryKey,
+  smallint,
   sql,
   text,
   timestamp,
@@ -34,6 +37,11 @@ export const notifications = pgTable(
     // What the row is about when that is narrower than the event — a conversation id.
     // Null for the rows whose subject is the event itself.
     subjectId: text("subject_id"),
+    // How many events this unread row stands for (`26.7`): a second message in a room the
+    // reader has not opened yet counts here rather than writing a second bell item.
+    count: integer("count").notNull().default(1),
+    // The last event counted, so a redelivered event is not counted twice.
+    lastEventId: uuid("last_event_id"),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -96,4 +104,37 @@ export const notificationPreferences = pgTable(
     ),
     index("notification_preferences_user_fk_idx").on(t.userId),
   ],
+);
+
+// One row per browser a person allowed push in (`26.3`), by tenant only: it grows with
+// devices, never with the calendar. Keyed by the endpoint, which the push service owns.
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").notNull(),
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    userId: uuid("user_id").$type<UserId>().notNull(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.id, t.organizationId] }),
+    uniqueIndex("push_subscriptions_endpoint_uq").on(t.organizationId, t.endpoint),
+    index("push_subscriptions_user_fk_idx").on(t.organizationId, t.userId),
+  ],
+);
+
+// A tenant's notification settings (`26.7`): the UTC hour its digest goes out. Catalog, so
+// the hourly fan-out filters tenants by it in the same query that pages them.
+export const notificationSettings = pgTable(
+  "notification_settings",
+  {
+    organizationId: uuid("organization_id").$type<OrganizationId>().primaryKey(),
+    digestHour: smallint("digest_hour").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).notNull(),
+    updatedBy: uuid("updated_by").$type<UserId>().notNull(),
+  },
+  (t) => [check("notification_settings_hour_ck", sql`${t.digestHour} between 0 and 23`)],
 );

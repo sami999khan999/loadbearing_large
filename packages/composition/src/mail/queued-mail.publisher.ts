@@ -22,7 +22,7 @@ const ONCE_WITHIN_SECONDS = 86_400;
 // link or code: long enough to see a failure, not a week of readable credentials.
 const CREDENTIAL_KEEP = Object.freeze({ completed: 0, failed: 3_600 });
 
-// The whole publisher. There is no row, no status and no sweep — see
+// The whole publisher. No row before the send, no status and no sweep — see
 // docs/reference/mail-pipeline.md.
 export class QueuedMailPublisher extends MailPublisher {
   public constructor(

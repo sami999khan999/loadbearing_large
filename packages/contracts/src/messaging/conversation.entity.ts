@@ -32,6 +32,13 @@ export class ConversationEntity {
     return this.dto.title ?? this.otherMember(self)?.name ?? null;
   }
 
+  // Everyone else in the room, named: who the composer's mention picker offers (`26.7`).
+  public othersThan(self: string): readonly { readonly userId: string; readonly name: string }[] {
+    return this.dto.members.flatMap((member) =>
+      member.userId !== self && member.name ? [{ userId: member.userId, name: member.name }] : [],
+    );
+  }
+
   // For an author line and for a typing frame, both of which arrive holding only an id.
   public nameOf(userId: string): string | null {
     return this.dto.members.find((member) => member.userId === userId)?.name ?? null;

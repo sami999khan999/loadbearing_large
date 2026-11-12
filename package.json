@@ -55,6 +55,7 @@
     "ai:reindex": "pnpm --filter @loadbearing/infrastructure run ai:reindex",
     "guide:publish": "node tooling/scripts/guide-publish.mjs",
     "explained:publish": "node tooling/scripts/explained-publish.mjs",
+    "assistant:load": "node tooling/scripts/assistant-load.mjs",
     "bench": "node tooling/scripts/bench.mjs",
     "doc:bench": "pnpm --filter @loadbearing/infrastructure run doc:bench",
     "doc:rerender": "pnpm --filter @loadbearing/infrastructure run doc:rerender",

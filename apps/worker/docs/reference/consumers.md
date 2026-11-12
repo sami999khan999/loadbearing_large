@@ -117,6 +117,12 @@ acknowledged, so a projector that failed mid-insert resumes from what is actuall
 A short batch means the replay has caught up — continuing would issue one more query to learn what
 the length already said.
 
+**The same run projects the assistant's meter.** After a tenant's activity walk, `ai_usage` is
+walked into `ai_usage_events` the same way: checkpoint read from the destination, keyset on
+`(created_at, id)`, the same settle horizon, inside the same shard scope, and from what is left
+of the run's batch budget. It takes no exclusion list, because the projection policy names
+activity actions. Its own schedule would have been a second tenant rotation for the same cost.
+
 **A run starts where the last one stopped, and wraps round** (`CR.20`). The budget is shared across
 tenants, and when every run started at the first tenant in id order, one tenant with a large backlog
 early in that order spent it every time and nobody after it was reached — unmeasured, because the

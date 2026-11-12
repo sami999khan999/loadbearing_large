@@ -21,6 +21,8 @@ export {
   type AssistantThreadRecord,
   AssistantThreadRepository,
 } from "./assistant-thread.repository.js";
+export { AssistantUsageProjector } from "./assistant-usage.projector.js";
+export { AssistantUsageReader, type AssistantUsageRow } from "./assistant-usage.reader.js";
 export {
   type AssistantUsageRecord,
   AssistantUsageRepository,
@@ -31,6 +33,13 @@ export { DeleteAssistantThreadUseCase } from "./delete-assistant-thread.use-case
 export { FailStaleAssistantAnswersUseCase } from "./fail-stale-assistant-answers.use-case.js";
 export { GenerateAssistantAnswerUseCase } from "./generate-assistant-answer.use-case.js";
 export { GetAssistantThreadUseCase } from "./get-assistant-thread.use-case.js";
+export { type AssistantUsage, GetAssistantUsageUseCase } from "./get-assistant-usage.use-case.js";
+export {
+  type AssistantUsageReport,
+  type AssistantUsageReportRow,
+  type GetAssistantUsageReportInput,
+  GetAssistantUsageReportUseCase,
+} from "./get-assistant-usage-report.use-case.js";
 export { ListAssistantThreadsUseCase } from "./list-assistant-threads.use-case.js";
 export { RenameAssistantThreadUseCase } from "./rename-assistant-thread.use-case.js";
 export {

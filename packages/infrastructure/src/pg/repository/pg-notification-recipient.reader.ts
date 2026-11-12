@@ -90,6 +90,24 @@ export class PgNotificationRecipientReader
     return [...recipients].sort((left, right) => left.userId.localeCompare(right.userId));
   }
 
+  // Two statements, as `conversationMembers` takes: the routed membership check for just
+  // these ids, then their addresses from the catalog.
+  public async conversationMembersAmong(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    userIds: readonly UserId[],
+  ): Promise<readonly Recipient[]> {
+    if (userIds.length === 0) return [];
+    const found = await this.conversations.findMemberships(
+      organizationId,
+      userIds.map((userId) => ({ conversationId, userId })),
+    );
+    return this.users(
+      organizationId,
+      found.map((pair) => pair.userId),
+    );
+  }
+
   public async user(organizationId: OrganizationId, userId: UserId): Promise<Recipient | null> {
     const [row] = await this.db
       .select({

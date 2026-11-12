@@ -79,6 +79,8 @@ export class ListArchivedNotificationsUseCase {
       category: String(row.category) as NotificationRecord["category"],
       params: (row.params ?? {}) as Record<string, string>,
       link: ListArchivedNotificationsUseCase.textOf(row.link),
+      // A month archived before `26.7` has no count: each of those rows was one event.
+      count: typeof row.count === "number" ? row.count : 1,
       readAt: ListArchivedNotificationsUseCase.dateOf(row.read_at),
       createdAt: new Date(ListArchivedNotificationsUseCase.textOf(row.created_at) ?? ""),
     };

@@ -407,6 +407,76 @@
       "when": 1792263637553,
       "tag": "0057_assistant_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1794325025955,
+      "tag": "0058_assistant_usage_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1794337599471,
+      "tag": "0059_mail_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1794339063625,
+      "tag": "0060_mail_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1794340744201,
+      "tag": "0061_notification_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1794340747041,
+      "tag": "0062_digest_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1794342025082,
+      "tag": "0063_notification_grouping",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1794355059629,
+      "tag": "0064_message_reactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1794425941594,
+      "tag": "0065_message_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1794427526778,
+      "tag": "0066_message_threads",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794429386562,
+      "tag": "0067_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

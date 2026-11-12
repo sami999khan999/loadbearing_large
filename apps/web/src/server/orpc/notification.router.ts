@@ -44,9 +44,36 @@ export class NotificationRouter {
     },
   );
 
+  public static readonly digestHour = authed.notification.digestHour.handler(({ context }) =>
+    context.container.notification.digestHour.execute(context.principal),
+  );
+
+  public static readonly updateDigestHour = authed.notification.updateDigestHour.handler(
+    ({ input, context }) =>
+      context.container.notification.updateDigestHour.execute(context.principal, input),
+  );
+
   public static readonly updatePreference = authed.notification.updatePreference.handler(
     async ({ input, context }) => {
       await context.container.notification.updatePreference.execute(context.principal, input);
+      return { ok: true as const };
+    },
+  );
+
+  public static readonly pushKey = authed.notification.pushKey.handler(({ context }) =>
+    context.container.notification.pushKey.execute(context.principal),
+  );
+
+  public static readonly pushSubscribe = authed.notification.pushSubscribe.handler(
+    async ({ input, context }) => {
+      await context.container.notification.pushSubscribe.execute(context.principal, input);
+      return { ok: true as const };
+    },
+  );
+
+  public static readonly pushUnsubscribe = authed.notification.pushUnsubscribe.handler(
+    async ({ input, context }) => {
+      await context.container.notification.pushUnsubscribe.execute(context.principal, input);
       return { ok: true as const };
     },
   );
@@ -62,5 +89,10 @@ export class NotificationRouter {
     markAllRead: NotificationRouter.markAllRead,
     preferences: NotificationRouter.preferences,
     updatePreference: NotificationRouter.updatePreference,
+    digestHour: NotificationRouter.digestHour,
+    updateDigestHour: NotificationRouter.updateDigestHour,
+    pushKey: NotificationRouter.pushKey,
+    pushSubscribe: NotificationRouter.pushSubscribe,
+    pushUnsubscribe: NotificationRouter.pushUnsubscribe,
   } as const;
 }

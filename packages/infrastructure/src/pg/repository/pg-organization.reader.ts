@@ -4,13 +4,14 @@ import {
   eq,
   exists,
   gt,
+  inArray,
   type OrganizationId,
   type OrganizationReader,
   type Placement,
   sql,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
-import { organizations, shardAssignments } from "../schema/index.js";
+import { notificationSettings, organizations, shardAssignments } from "../schema/index.js";
 
 // The catalog read every per-tenant loop starts from, and the one read in this system
 // that is cross-tenant by definition rather than by accident.
@@ -40,6 +41,32 @@ export class PgOrganizationReader extends BaseRepository implements Organization
     return rows.map((row) => row.id);
   }
 
+  // The tenants whose digest is due, filtered in the page query itself: a left join to
+  // their setting, so a tenant that never chose one is due at the default hour.
+  public async pageDueForDigest(
+    after: OrganizationId | null,
+    limit: number,
+    onNode: number,
+    hour: number,
+    defaultHour: number,
+  ): Promise<readonly OrganizationId[]> {
+    const rows = await this.db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .leftJoin(notificationSettings, eq(notificationSettings.organizationId, organizations.id))
+      .where(
+        and(
+          after ? gt(organizations.id, after) : undefined,
+          this.placedOn(onNode),
+          sql`coalesce(${notificationSettings.digestHour}, ${defaultHour}) = ${hour}`,
+        ),
+      )
+      .orderBy(asc(organizations.id))
+      .limit(limit);
+
+    return rows.map((row) => row.id);
+  }
+
   public async nameOf(organizationId: OrganizationId): Promise<string | null> {
     const rows = await this.db
       .select({ name: organizations.name })
@@ -48,6 +75,18 @@ export class PgOrganizationReader extends BaseRepository implements Organization
       .limit(1);
 
     return rows[0]?.name ?? null;
+  }
+
+  public async namesOf(
+    organizationIds: readonly OrganizationId[],
+  ): Promise<ReadonlyMap<OrganizationId, string>> {
+    if (organizationIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(inArray(organizations.id, [...organizationIds]));
+
+    return new Map(rows.map((row) => [row.id, row.name]));
   }
 
   // A correlated `EXISTS` rather than a join, so the projection and the keyset stay

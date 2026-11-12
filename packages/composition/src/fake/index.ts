@@ -1,6 +1,7 @@
 export { DirectUnitOfWork } from "./direct.unit-of-work.js";
 export { InMemoryActivityReplayReader } from "./in-memory-activity-replay.reader.js";
 export { InMemoryAnalyticsProjector } from "./in-memory-analytics.projector.js";
+export { InMemoryAssistantUsageProjector } from "./in-memory-assistant-usage.projector.js";
 export { InMemoryCacheStore } from "./in-memory-cache.store.js";
 export { InMemoryColdArchiveReader } from "./in-memory-cold-archive.reader.js";
 export { InMemoryFlagRepository } from "./in-memory-flag.repository.js";
@@ -8,6 +9,7 @@ export { InMemoryLogReader } from "./in-memory-log.reader.js";
 export { InMemoryOrganizationReader } from "./in-memory-organization.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
 export { InMemoryPlatformPolicyRepository } from "./in-memory-platform-policy.repository.js";
+export { InMemoryPresenceReader } from "./in-memory-presence.reader.js";
 export { InMemoryProjectionPolicyRepository } from "./in-memory-projection-policy.repository.js";
 export { InMemoryQueueControlGateway } from "./in-memory-queue-control.gateway.js";
 export { InMemoryRateLimitStore } from "./in-memory-rate-limit.store.js";
@@ -44,6 +46,7 @@ export {
   RecordingMaintenanceGateway,
 } from "./recording-maintenance.gateway.js";
 export { RecordingPartitionArchiveGateway } from "./recording-partition-archive.gateway.js";
+export { RecordingPushSender } from "./recording-push.sender.js";
 export { type PublishedJob, RecordingQueuePublisher } from "./recording-queue.publisher.js";
 export {
   type PublishedFrame,
@@ -52,7 +55,9 @@ export {
 export { RecordingRelayedActivityStore } from "./recording-relayed-activity.store.js";
 export { RecordingSessionGateway } from "./recording-session.gateway.js";
 export { ScriptedAssistantModel } from "./scripted-assistant.model.js";
+export { StubEmailSenderResolver } from "./stub-email-sender.resolver.js";
 export { StubEmbeddingProvider } from "./stub-embedding.provider.js";
 export { StubMailRenderer } from "./stub-mail.renderer.js";
 export { StubMarkdownRenderer } from "./stub-markdown.renderer.js";
+export { StubSecretCipher } from "./stub-secret.cipher.js";
 export { StubSessionResolver } from "./stub-session.resolver.js";

@@ -84,6 +84,16 @@ export interface ContainerConfig {
     // The origin a link in a message points at. Separate from `auth.baseUrl`, which is
     // Better Auth's own: the worker sends invitation mail and has no auth config at all.
     readonly baseUrl: string;
+    // `MAIL_SECRET_KEY`, 32 bytes base64. Absent, no SMTP password can be saved from the
+    // dashboard, and a saved one is not used (`26.11`).
+    readonly secretKey?: string;
+  };
+  // VAPID keys for web push (`26.3`). Absent, the settings page offers no push and a
+  // `push` preference reaches nobody; both keys are generated once and kept.
+  readonly push?: {
+    readonly publicKey: string;
+    readonly privateKey: string;
+    readonly subject: string;
   };
   // `none` is lexical search over the chunk text and no outbound call. The other two need
   // a key, and a model defaults per provider when unset. See docs/reference/container.md.
@@ -115,6 +125,8 @@ export interface ContainerConfig {
     readonly orgDailyTokens?: number;
     // How many answers one person may have generating at once.
     readonly activePerUser?: number;
+    // `fake` only: a pause between words, so a load test or a walk sees a stream move.
+    readonly fakeDelayMs?: number;
   };
   // Three blocks. `vector` and `logs` name a `driver` the container switches on;
   // `analytics` has no reader to switch. See docs/reference/container.md.

@@ -21,6 +21,7 @@ import type {
   CacheStore,
   MailPublisher,
   MailRequest,
+  PushPayload,
   RealtimePublisher,
 } from "../../src/port/index.js";
 import { Principal, type RealtimeChannel } from "../../src/primitive/index.js";
@@ -55,6 +56,20 @@ class Notifications implements NotificationRepository {
   public unreadSubjects: readonly string[] = [];
 
   public suppressionQueries = 0;
+
+  public readonly counted: { userIds: readonly string[]; subjectId: string; eventId: string }[] =
+    [];
+
+  public countIntoUnread(
+    _organizationId: unknown,
+    userIds: readonly string[],
+    _kind: unknown,
+    subjectId: string,
+    eventId: string,
+  ): Promise<void> {
+    if (userIds.length > 0) this.counted.push({ userIds, subjectId, eventId });
+    return Promise.resolve();
+  }
 
   public unreadSubjectHolders(
     _organizationId: unknown,
@@ -134,6 +149,18 @@ class Recipients implements NotificationRecipientReader {
 
   public users(): Promise<readonly Recipient[]> {
     return Promise.resolve(this.members);
+  }
+
+  public conversationMembersAmong(
+    _organizationId: unknown,
+    _conversationId: unknown,
+    userIds: readonly string[],
+  ): Promise<readonly Recipient[]> {
+    return Promise.resolve(
+      (this as unknown as { members?: readonly Recipient[] }).members?.filter((member) =>
+        userIds.includes(member.userId),
+      ) ?? [],
+    );
   }
 
   public conversationMembers(): Promise<readonly Recipient[]> {
@@ -241,6 +268,69 @@ beforeEach(() => {
 });
 
 describe("DeliverNotificationUseCase", () => {
+  const channelMessage = (mentions: readonly string[]) =>
+    ({
+      id: "018f8c00-0000-7000-8000-000000000023",
+      organizationId: ORG,
+      name: "message.sent",
+      actorId: ACTOR,
+      occurredAt: new Date("2026-08-15T00:00:00Z"),
+      payload: {
+        conversationId: "018f8c00-0000-7000-8000-0000000000c2",
+        messageId: "018f8c00-0000-7000-8000-0000000000d2",
+        conversationKind: "channel",
+        mentions,
+      },
+    }) as unknown as DomainEvent;
+
+  // `26.7`: a channel message notifies nobody, unless it names people in the room.
+  it("notifies the members a channel message mentions, and only them", async () => {
+    const deliver = build([], [recipient(TARGET)]);
+
+    await deliver.execute(system(), channelMessage([TARGET]));
+
+    expect(notifications.saved).toHaveLength(1);
+    expect(notifications.saved[0]).toMatchObject({ userId: TARGET, kind: "message.mentioned" });
+  });
+
+  it("notifies nobody for a mention of someone outside the room, or no mention at all", async () => {
+    const deliver = build([], [recipient(TARGET)]);
+
+    await deliver.execute(system(), channelMessage(["018f8c00-0000-7000-8000-0000000000ee"]));
+    await deliver.execute(system(), channelMessage([]));
+
+    expect(notifications.saved).toHaveLength(0);
+  });
+
+  // `26.7`: a reader with an unread item about this conversation gets it counted, not a
+  // second item, and someone without one gets a fresh row.
+  it("counts a direct message into the reader's unread item instead of writing another", async () => {
+    const deliver = build([], [recipient(TARGET)]);
+    notifications.unreadSubjects = ["018f8c00-0000-7000-8000-0000000000c1"];
+
+    await deliver.execute(system(), {
+      id: "018f8c00-0000-7000-8000-000000000022",
+      organizationId: ORG,
+      name: "message.sent",
+      actorId: ACTOR,
+      occurredAt: new Date("2026-08-15T00:00:00Z"),
+      payload: {
+        conversationId: "018f8c00-0000-7000-8000-0000000000c1",
+        messageId: "018f8c00-0000-7000-8000-0000000000d1",
+        conversationKind: "direct",
+      },
+    } as unknown as DomainEvent);
+
+    expect(notifications.saved).toHaveLength(0);
+    expect(notifications.counted).toEqual([
+      {
+        userIds: [TARGET],
+        subjectId: "018f8c00-0000-7000-8000-0000000000c1",
+        eventId: "018f8c00-0000-7000-8000-000000000022",
+      },
+    ]);
+  });
+
   it("writes one row for the member a role change was about", async () => {
     const deliver = build();
 
@@ -350,5 +440,93 @@ describe("DeliverNotificationUseCase", () => {
     await deliver.execute(system(), roleChanged());
 
     expect(cache.deleted).toContain(`notification:unread:${ORG}:${TARGET}`);
+  });
+});
+
+// `26.3`: push is a third channel, `immediate` or `off`, sent to every device a person
+// subscribed, at most once per event per device, and a device the service retired is dropped.
+describe("DeliverNotificationUseCase, push", () => {
+  const pushOn: PreferenceRecord = {
+    userId: TARGET,
+    category: "membership",
+    channel: "push",
+    mode: "immediate",
+  };
+
+  const withPush = (
+    preferences: readonly PreferenceRecord[],
+    outcome: "sent" | "gone",
+    claimed = true,
+  ) => {
+    const sent: { endpoint: string; payload: PushPayload }[] = [];
+    const deleted: (string | null)[] = [];
+    const pushCache = new Cache();
+    pushCache.setIfAbsent = () => Promise.resolve(claimed);
+    const useCase = new DeliverNotificationUseCase(
+      new Notifications(),
+      new Preferences(preferences),
+      new Recipients(),
+      new Mail(),
+      new Realtime(),
+      pushCache,
+      { run: (work: () => Promise<unknown>) => work() } as never,
+      {
+        subscriptions: {
+          forUsers: () =>
+            Promise.resolve([
+              { userId: TARGET, endpoint: "https://push.test/a", p256dh: "k", auth: "a" },
+            ]),
+          delete: (_org: unknown, endpoint: string, userId: string | null) => {
+            deleted.push(userId === null ? endpoint : null);
+            return Promise.resolve();
+          },
+        } as never,
+        sender: {
+          send: (target: { endpoint: string }, payload: PushPayload) => {
+            sent.push({ endpoint: target.endpoint, payload });
+            return Promise.resolve(outcome);
+          },
+        } as never,
+      },
+    );
+    return { useCase, sent, deleted };
+  };
+
+  it("pushes the kind and its link, in the recipient's locale, when push is on", async () => {
+    const { useCase, sent } = withPush([pushOn], "sent");
+
+    await useCase.execute(system(), roleChanged());
+
+    expect(sent).toEqual([
+      {
+        endpoint: "https://push.test/a",
+        payload: { kind: "member.role.changed", link: "/settings/members", locale: "en" },
+      },
+    ]);
+  });
+
+  // Membership's default for push is off: a role change pushes nothing until chosen.
+  it("pushes nothing at the default for membership", async () => {
+    const { useCase, sent } = withPush([], "sent");
+
+    await useCase.execute(system(), roleChanged());
+
+    expect(sent).toEqual([]);
+  });
+
+  it("sends a redelivered event to no device twice", async () => {
+    const { useCase, sent } = withPush([pushOn], "sent", false);
+
+    await useCase.execute(system(), roleChanged());
+
+    expect(sent).toEqual([]);
+  });
+
+  it("deletes a subscription the push service says is gone", async () => {
+    const { useCase, deleted } = withPush([pushOn], "gone");
+
+    await useCase.execute(system(), roleChanged());
+
+    expect(deleted).toEqual(["https://push.test/a"]);
   });
 });

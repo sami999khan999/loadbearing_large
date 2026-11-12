@@ -232,6 +232,7 @@ export interface EventShape {
   // null, and a missing id is a fact about the server rather than about the message.
   readonly "mail.delivery.sent": { readonly template: string; readonly messageId: string };
   readonly "mail.delivery.failed": { readonly template: string; readonly attempts: number };
+  readonly "mail.settings.unusable": { readonly organizationId: string; readonly reason: string };
 
   readonly "outbox.drain.completed": { readonly events: number; readonly jobs: number };
   readonly "outbox.drain.lagged": { readonly oldestAgeMs: number };
@@ -241,6 +242,8 @@ export interface EventShape {
   readonly "notification.digest.completed": {
     readonly organizations: number;
     readonly day: string;
+    // The UTC hour whose tenants this run sent (`26.7`).
+    readonly hour: number;
   };
 
   // No user id and no channel: both are per-person, and a label is not what they would

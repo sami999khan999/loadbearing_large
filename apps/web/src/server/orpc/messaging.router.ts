@@ -13,6 +13,10 @@ export class ConversationRouter {
     context.container.messaging.createConversation.execute(context.principal, input),
   );
 
+  public static readonly presence = authed.conversation.presence.handler(({ input, context }) =>
+    context.container.messaging.presence.execute(context.principal, input.conversationId),
+  );
+
   public static readonly get = authed.conversation.get.handler(({ input, context }) =>
     context.container.messaging.getConversation.execute(context.principal, input.conversationId),
   );
@@ -49,6 +53,7 @@ export class ConversationRouter {
   );
 
   public static readonly all = {
+    presence: ConversationRouter.presence,
     list: ConversationRouter.list,
     create: ConversationRouter.create,
     get: ConversationRouter.get,

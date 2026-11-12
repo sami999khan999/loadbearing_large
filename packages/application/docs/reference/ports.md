@@ -202,8 +202,8 @@ can be. A caller that needs delivery confirmation is asking a question only a we
 provider can answer.
 
 It resolves with an `EmailReceipt` carrying the transport's `messageId`, nullable because plenty of
-servers return none. **The receipt is logged, not stored** — this system keeps no delivery table, so
-the id exists to be correlated later against a provider's own record. Every hop to it is optional
+servers return none. **The receipt is logged, and kept in the delivery log** (`26.10`), so the id can be
+correlated later against a provider's own record. Every hop to it is optional
 for a reason worth keeping: reading the id off a transport that resolved with nothing turned a sent
 message into a thrown `UnavailableError` and a pointless retry.
 
@@ -275,7 +275,8 @@ would silently never run.
 ## `RealtimePublisher` is fire-and-forget, and says so
 
 A frame published to a channel nobody is listening on is kept only as long as the adapter's
-replay log keeps it — the last two hundred per channel, for an hour (`26.5`). A resume inside that
+replay log keeps it — the last two hundred per channel, for an hour (`26.5`), and not at all for
+a frame marked `replay: false` (`RV.3`). A resume inside that
 is replayed what it missed; one outside it is handed a `resync` and refetches what it subscribes
 to. The `resync` variant stays in the contract because the log is short by design, and a contract
 that promised a full replay would be a lie the first time a tab slept for a day.

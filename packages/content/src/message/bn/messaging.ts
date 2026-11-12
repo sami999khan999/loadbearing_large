@@ -31,4 +31,16 @@ export const messaging = {
 
   "messaging.typing.one": "{name} লিখছেন…",
   "messaging.typing.many": "একাধিক জন লিখছেন…",
+  "messaging.presence.online": "এখন অনলাইনে: {names}",
+  "messaging.compose.mention": "উল্লেখ করুন…",
+  "messaging.reaction.add": "প্রতিক্রিয়া দিন",
+  "messaging.reaction.toggle": "{emoji} প্রতিক্রিয়া: {count}",
+  "messaging.attachment.add": "ফাইল যুক্ত করুন",
+  "messaging.attachment.remove": "{name} সরান",
+  "messaging.attachment.open": "{name} খুলুন",
+  "messaging.attachment.failed": "ফাইলটি আপলোড করা যায়নি।",
+  "messaging.thread.reply": "উত্তর দিন",
+  "messaging.thread.replies": "উত্তর: {count}",
+  "messaging.thread.title": "থ্রেড",
+  "messaging.thread.more": "আরও উত্তর দেখুন",
 } as const;

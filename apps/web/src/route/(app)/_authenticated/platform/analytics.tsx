@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  AssistantUsageReportPanel,
   Can,
   type ClientNamespace,
   PLATFORM_ROUTE_PERMISSION,
@@ -28,6 +29,8 @@ export const Route = createFileRoute("/(app)/_authenticated/platform/analytics")
       context.messages.ensure(MESSAGES),
       context.queryClient.ensureQueryData(PlatformQueries.projection(context.api)),
       context.queryClient.ensureQueryData(PlatformQueries.policy(context.api)),
+      // The usage panel's default window. Same key as the route, so it can never refuse.
+      context.queryClient.ensureQueryData(PlatformQueries.assistantUsage(context.api, 30)),
     ]),
   component: PlatformAnalytics,
 });
@@ -55,6 +58,7 @@ function PlatformAnalytics() {
       <h1>{t("platform.projection.title")}</h1>
       <Can permission="platform.analytics.read" capabilities={capabilities}>
         <ProjectionSwitchPanel auditMonths={auditMonths} />
+        <AssistantUsageReportPanel />
       </Can>
       <Can permission="platform.analytics.manage" capabilities={capabilities}>
         <ProjectionGapsPanel />

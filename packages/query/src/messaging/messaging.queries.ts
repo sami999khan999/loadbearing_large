@@ -24,6 +24,16 @@ export class MessagingQueries {
     });
   }
 
+  // Re-read every thirty seconds while the page is open: a lease lasts ninety (`26.6`).
+  public static presence(client: ApiClient, conversationId: string) {
+    return queryOptions({
+      queryKey: QueryKeys.conversation.presence(conversationId),
+      queryFn: ({ signal }) => client.conversation.presence({ conversationId }, { signal }),
+      staleTime: 30_000,
+      refetchInterval: 30_000,
+    });
+  }
+
   public static conversation(client: ApiClient, conversationId: string) {
     return queryOptions({
       queryKey: QueryKeys.conversation.get(conversationId),
@@ -46,6 +56,30 @@ export class MessagingQueries {
       getNextPageParam: (last: MessagePage) => last.olderCursor ?? undefined,
       // Zero, because the stream is what keeps this fresh. A stale time here would let a
       // remount show a conversation that is behind the one the tab was just watching.
+      staleTime: 0,
+    });
+  }
+
+  // A root's replies, oldest first (`26.1`); the next page is newer, as a thread reads.
+  public static thread(
+    client: ApiClient,
+    root: { readonly conversationId: string; readonly id: string; readonly createdAt: Date },
+  ) {
+    return infiniteQueryOptions({
+      queryKey: QueryKeys.message.thread(root.id),
+      queryFn: ({ pageParam, signal }) =>
+        client.message.thread(
+          {
+            conversationId: root.conversationId,
+            messageId: root.id,
+            createdAt: root.createdAt,
+            ...(pageParam ? { after: pageParam } : {}),
+          },
+          { signal },
+        ),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (last: { readonly newerCursor: string | null }) =>
+        last.newerCursor ?? undefined,
       staleTime: 0,
     });
   }

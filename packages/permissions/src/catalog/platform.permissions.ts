@@ -19,6 +19,19 @@ export const platformPermissions = {
     label: "Change retention policy",
     requires: ["platform.retention.read"],
   },
+  // The delivery log (`26.10`): every tenant's outcomes, one tenant at a time.
+  "platform.mail.read": {
+    scope: "platform",
+    module: "platform",
+    label: "View mail deliveries",
+  },
+  // The platform's default mail server and each tenant's override (`26.11`).
+  "platform.mail.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Change mail servers",
+    requires: ["platform.mail.read"],
+  },
   "platform.analytics.read": {
     scope: "platform",
     module: "platform",

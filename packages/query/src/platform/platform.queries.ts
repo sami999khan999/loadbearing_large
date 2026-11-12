@@ -1,5 +1,5 @@
 import type { ApiClient, OrganizationId, ShardMapQuery, TenantStorageQuery } from "../import.js";
-import { queryOptions } from "../import.js";
+import { infiniteQueryOptions, queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
 export class PlatformQueries {
@@ -143,6 +143,44 @@ export class PlatformQueries {
       queryKey: QueryKeys.platform.modules(),
       queryFn: () => client.platform.moduleSwitches(),
       staleTime: 10_000,
+    });
+  }
+
+  // One organization's mail server, or null when it falls back (`26.11`).
+  public static mailSettings(client: ApiClient, organizationId: OrganizationId) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.mailSettings(organizationId),
+      queryFn: () => client.platform.mailSettings({ organizationId }),
+      staleTime: 60_000,
+    });
+  }
+
+  // A page of one tenant's mail outcomes. Thirty seconds: support is asking about now.
+  public static mailDeliveries(
+    client: ApiClient,
+    params: {
+      readonly organizationId: OrganizationId;
+      readonly recipient?: string;
+      readonly limit: number;
+    },
+  ) {
+    return infiniteQueryOptions({
+      queryKey: QueryKeys.platform.mailDeliveries(params),
+      queryFn: ({ pageParam }) =>
+        client.platform.mailDeliveries({ ...params, ...(pageParam ? { cursor: pageParam } : {}) }),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (last: { readonly nextCursor: string | null }) =>
+        last.nextCursor ?? undefined,
+      staleTime: 30_000,
+    });
+  }
+
+  // Five minutes, the projection's own cadence: a fresher read shows the same rows.
+  public static assistantUsage(client: ApiClient, days: 7 | 30 | 90) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.assistantUsage(days),
+      queryFn: () => client.platform.assistantUsage({ days }),
+      staleTime: 5 * 60_000,
     });
   }
 

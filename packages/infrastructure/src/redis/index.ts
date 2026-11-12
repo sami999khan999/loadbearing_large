@@ -6,6 +6,7 @@ export {
   RedisAssistantStreamSubscriber,
 } from "./redis-assistant-stream.subscriber.js";
 export { RedisCacheStore } from "./redis-cache.store.js";
+export { RedisPresenceReader } from "./redis-presence.reader.js";
 export { RedisRateLimitStore } from "./redis-rate-limit.store.js";
 export { RedisRealtimePublisher } from "./redis-realtime.publisher.js";
 export {
@@ -13,3 +14,4 @@ export {
   RedisRealtimeSubscriber,
 } from "./redis-realtime.subscriber.js";
 export { RedisWorkerFleetGateway } from "./redis-worker-fleet.gateway.js";
+export { StreamLease } from "./stream-lease.js";

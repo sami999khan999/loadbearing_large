@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { DocImageKey } from "../../src/doc/doc-image-key.js";
 import { DocImageOrphans } from "../../src/doc/doc-image-orphans.js";
 import type { DocPageRepository } from "../../src/doc/doc-page.repository.js";
-import type { StorageGateway } from "../../src/port/index.js";
+import type {
+  ColdArchiveReader,
+  PartitionArchiveEntry,
+  PartitionArchiveGateway,
+  StorageGateway,
+} from "../../src/port/index.js";
 
 const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
 const SPACE = Identifiers.docSpaceId.parse("018f8c00-0000-7000-8000-000000000030") as DocSpaceId;
@@ -46,7 +51,29 @@ const harness = (
       return Promise.resolve();
     },
   } as unknown as StorageGateway;
-  return { orphans: new DocImageOrphans(pages, storage, { now: () => NOW }), deleted, keys };
+  return {
+    orphans: new DocImageOrphans(pages, storage, { now: () => NOW }),
+    deleted,
+    keys,
+    pages,
+    storage,
+  };
+};
+
+// Archived `doc_revision` months, each one batch of rows carrying `markdown`.
+const archived = (months: readonly (readonly string[])[]) => {
+  const entries = months.map(
+    (_, at) => ({ period: `2025-0${at + 1}-01`, organizationId: ORG }) as PartitionArchiveEntry,
+  );
+  const archive = {
+    monthsOf: (table: string) => Promise.resolve(table === "doc_revision" ? entries : []),
+  } as unknown as PartitionArchiveGateway;
+  const cold = {
+    batches: async function* (entry: PartitionArchiveEntry) {
+      yield (months[entries.indexOf(entry)] ?? []).map((markdown) => ({ markdown }));
+    },
+  } as unknown as ColdArchiveReader;
+  return { archive, cold };
 };
 
 const link = (file: string) => DocImageKey.url(ORG, SPACE, file);
@@ -92,5 +119,16 @@ describe("DocImageOrphans", () => {
     expect(DocImageKey.uploadedAt(fileAged(HOUR, 1))?.getTime()).toBe(NOW.getTime() - HOUR);
     expect(DocImageKey.uploadedAt("not-a-uuid.png")).toBeNull();
     expect(DocImageKey.uploadedAt("018f8c00-0000-4000-8000-000000000001.png")).toBeNull();
+  });
+
+  // `RW.3`: a month the retention pass archived still links its images, and restoring it
+  // must not bring back broken links.
+  it("keeps an image only an archived revision links, and drops one no month links", async () => {
+    const { pages, storage, deleted } = harness([linked, lost], []);
+    const { archive, cold } = archived([[`old text ${link(linked)}`], ["no image here"]]);
+    const orphans = new DocImageOrphans(pages, storage, { now: () => NOW }, archive, cold);
+
+    expect(await orphans.run(ORG, SPACE)).toBe(1);
+    expect(deleted.map((key) => key.split("/").pop())).toEqual([lost]);
   });
 });

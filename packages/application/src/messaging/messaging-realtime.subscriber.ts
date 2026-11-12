@@ -91,6 +91,9 @@ export class MessagingRealtimeSubscriber extends EventSubscriber {
               name: "conversation.changed",
               at: event.occurredAt,
               payload: { conversationId },
+              // Unlogged (`RV.3`): a log per member per message is the amplification, and a
+              // reopened user stream refetches the list instead of replaying these.
+              replay: false,
             }),
           ),
         );

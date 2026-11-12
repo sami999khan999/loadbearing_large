@@ -177,6 +177,32 @@ export class PlatformProcedures {
     .input(PlatformContract.moduleSwitchUpdate)
     .output(Envelope.acknowledged);
 
+  public static readonly mailSettings = oc
+    .route({ method: "GET", path: "/platform/mail/settings" })
+    .input(PlatformContract.mailSettingsQuery)
+    .output(PlatformContract.mailSettings);
+
+  public static readonly saveMailSettings = oc
+    .route({ method: "PUT", path: "/platform/mail/settings" })
+    .input(PlatformContract.saveMailSettings)
+    .output(PlatformContract.mailSettingsView);
+
+  public static readonly removeMailSettings = oc
+    .route({ method: "DELETE", path: "/platform/mail/settings" })
+    .input(PlatformContract.mailSettingsQuery)
+    .output(Envelope.acknowledged);
+
+  public static readonly mailDeliveries = oc
+    .route({ method: "GET", path: "/platform/mail/deliveries" })
+    .input(PlatformContract.mailDeliveryQuery)
+    .output(PlatformContract.mailDeliveryPage);
+
+  // Tokens by tenant, model and UTC day, read from the analytics store.
+  public static readonly assistantUsage = oc
+    .route({ method: "GET", path: "/platform/assistant-usage" })
+    .input(PlatformContract.assistantUsageQuery)
+    .output(PlatformContract.assistantUsage);
+
   public static readonly listProjection = oc
     .route({ method: "GET", path: "/platform/projection" })
     .output(PlatformContract.projection);
@@ -269,6 +295,11 @@ export class PlatformProcedures {
     updateProjectionSwitch: PlatformProcedures.updateProjectionSwitch,
     updateReplicaSwitch: PlatformProcedures.updateReplicaSwitch,
     listProjection: PlatformProcedures.listProjection,
+    assistantUsage: PlatformProcedures.assistantUsage,
+    mailDeliveries: PlatformProcedures.mailDeliveries,
+    mailSettings: PlatformProcedures.mailSettings,
+    saveMailSettings: PlatformProcedures.saveMailSettings,
+    removeMailSettings: PlatformProcedures.removeMailSettings,
     updateProjection: PlatformProcedures.updateProjection,
     deleteTenant: PlatformProcedures.deleteTenant,
     exportTenant: PlatformProcedures.exportTenant,

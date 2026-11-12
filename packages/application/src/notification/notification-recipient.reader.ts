@@ -33,4 +33,12 @@ export abstract class NotificationRecipientReader {
     conversationId: ConversationId,
     limit: number,
   ): Promise<readonly Recipient[]>;
+
+  // Of `userIds`, the ones who are members of the conversation (`26.7`): a mention of
+  // someone outside the room notifies nobody, whatever the token said.
+  public abstract conversationMembersAmong(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    userIds: readonly UserId[],
+  ): Promise<readonly Recipient[]>;
 }

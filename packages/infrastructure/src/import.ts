@@ -4,7 +4,13 @@
 // ── node ─────────────────────────────────────────────────────────────────────
 export { AsyncLocalStorage } from "node:async_hooks";
 export { Buffer } from "node:buffer";
-export { createHash, type Hash } from "node:crypto";
+export {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  type Hash,
+  randomBytes,
+} from "node:crypto";
 export { once } from "node:events";
 export { Readable } from "node:stream";
 export { pipeline } from "node:stream/promises";
@@ -69,8 +75,11 @@ export {
   type AssistantThreadCursor,
   type AssistantThreadRecord,
   type AssistantThreadRepository,
+  type AssistantUsageProjector,
+  type AssistantUsageReader,
   type AssistantUsageRecord,
   type AssistantUsageRepository,
+  type AssistantUsageRow,
   type AssistantUsageTotal,
   CacheStore,
   type CancellationSignal,
@@ -116,6 +125,7 @@ export {
   type EmailMessage,
   type EmailReceipt,
   EmailSender,
+  EmailSenderResolver,
   EmbeddingProvider,
   type EmbeddingPurpose,
   type EntitlementRepository,
@@ -132,14 +142,23 @@ export {
   type LogEntry,
   type LogQuery,
   LogReader,
+  type MailDeliveryCursor,
+  type MailDeliveryRecord,
+  type MailDeliveryRepository,
+  type MailSettingsRecord,
+  type MailSettingsRepository,
   type MaintenanceGateway,
   // A value: the unified adapter extends it.
   MarkdownRenderer,
   type MemberPage,
   type MemberRecord,
   type MemberRepository,
+  type MessageAttachmentRecord,
+  type MessageAttachmentRepository,
   type MessagePageResult,
   type MessageQuery,
+  type MessageReactionKey,
+  type MessageReactionRepository,
   type MessageRecord,
   MessageRepository,
   type ModuleSwitchRecord,
@@ -155,6 +174,7 @@ export {
   type NotificationRecipientReader,
   type NotificationRecord,
   type NotificationRepository,
+  type NotificationSettingsRepository,
   type OrganizationReader,
   type OutboxGateway,
   type OverrideInput,
@@ -176,6 +196,7 @@ export {
   type PlatformPolicyRepository,
   type PlatformReader,
   type PreferenceRecord,
+  PresenceReader,
   type PresignedPost,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
@@ -184,6 +205,11 @@ export {
   type ProjectionGap,
   type ProjectionPolicyRecord,
   type ProjectionPolicyRepository,
+  type PushPayload,
+  PushSender,
+  type PushSubscriptionRecord,
+  type PushSubscriptionRepository,
+  type PushTarget,
   type QueueControlGateway,
   type QueueCounts,
   type QueuedJob,
@@ -191,6 +217,7 @@ export {
   QueueName,
   QueuePublisher,
   RateLimitStore,
+  type ReactionSummary,
   type RealtimeChannel,
   RealtimeChannels,
   type RealtimePublisher,
@@ -209,6 +236,7 @@ export {
   type RoleRecord,
   type RoleRepository,
   type SearchHit,
+  SecretCipher,
   Shard,
   type ShardAssignment,
   type ShardAssignmentRepository,
@@ -239,6 +267,7 @@ export {
   type TenantStoragePage,
   type TenantStorageReader,
   type TenantStorageRow,
+  type ThreadPageResult,
   UnitOfWork,
   type UnreadCount,
   type UnreadQuery,
@@ -282,6 +311,7 @@ export {
   Identifiers,
   type InvitationId,
   type KeysetQuery,
+  type MessageAttachmentDto,
   type MessageId,
   type NotificationCategory,
   type NotificationId,
@@ -383,10 +413,8 @@ export type { Nodes as MdastNodes, Root as MdastRoot } from "mdast";
 // Its types ship separately and are pinned to the same major: a `@types/nodemailer` a
 // major behind describes a `sendMail` that is *almost* the one being called.
 export { createTransport, type Transporter } from "nodemailer";
-
 // ── pg ───────────────────────────────────────────────────────────────────────
 export { Pool } from "pg";
-
 // ── rehype · remark · unified ────────────────────────────────────────────────
 // The doc renderer's pipeline. Named here once, so a swap of Markdown library is this
 // block and `src/unified/`, and nothing else.
@@ -404,3 +432,6 @@ export { default as remarkParse } from "remark-parse";
 export { default as remarkRehype } from "remark-rehype";
 export { unified } from "unified";
 export { visit } from "unist-util-visit";
+// ── web-push ─────────────────────────────────────────────────────────────────
+// CommonJS with no named exports Node can see, so the default object; types pinned to 3.x.
+export { default as webPush } from "web-push";

@@ -1,11 +1,22 @@
-import { SystemPrincipal } from "../bootstrap/index.js";
-import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
+import { SystemPrincipal, withShard } from "../bootstrap/index.js";
+import {
+  type Container,
+  type Job,
+  type OrganizationId,
+  QueueName,
+  type Redis,
+  type UserId,
+  Worker,
+} from "../import.js";
 
 interface MailJobData {
   readonly template: string;
   readonly to: string;
   readonly locale: string;
   readonly params: unknown;
+  // Absent on a job queued before the delivery log, which is recorded as the platform's.
+  readonly organizationId?: string | null;
+  readonly userId?: string | null;
 }
 
 // A thin adapter, exactly like an oRPC router. Everything worth testing lives in
@@ -44,13 +55,14 @@ export class MailConsumer {
         attempt: job?.attemptsMade ?? 0,
       });
 
-      // The only place a permanently undelivered message is reported. With no delivery
-      // table, this line and `mail.delivery.sent` are the record.
-      if (MailConsumer.isFinalAttempt(job)) {
+      // The only place a permanently undelivered message is reported: this line, and its
+      // row in the delivery log.
+      if (job && MailConsumer.isFinalAttempt(job)) {
         this.container.logger.emit("mail.delivery.failed", {
-          template: job?.data.template ?? "unknown",
-          attempts: job?.attemptsMade ?? 0,
+          template: job.data.template,
+          attempts: job.attemptsMade,
         });
+        void this.record(job, "failed", null, job.attemptsMade);
       }
     });
 
@@ -82,6 +94,7 @@ export class MailConsumer {
             to: job.data.to,
             locale: job.data.locale as never,
             params: job.data.params,
+            organizationId: (job.data.organizationId ?? null) as OrganizationId | null,
           });
 
           // The id a provider webhook would later correlate against, which is the whole
@@ -90,10 +103,42 @@ export class MailConsumer {
             template: job.data.template,
             messageId: receipt.messageId ?? "",
           });
+          await this.record(job, "sent", receipt.messageId ?? null, job.attemptsMade + 1);
         }
         return;
       default:
         throw new Error(`Unknown mail job: ${job.name}`);
+    }
+  }
+
+  // After the outcome, never before, and never fatal (`26.10`): a row that cannot be written
+  // is a line in the log, not a resend of mail that already went.
+  private async record(
+    job: Job<MailJobData>,
+    status: "sent" | "failed",
+    messageId: string | null,
+    attempts: number,
+  ): Promise<void> {
+    try {
+      const record = this.container.mail.record;
+      const organizationId = (job.data.organizationId ?? null) as OrganizationId | null;
+      const tenant = await record.tenantOf(organizationId);
+      await withShard(this.container, tenant, () =>
+        record.execute({
+          organizationId: tenant,
+          userId: (job.data.userId ?? null) as UserId | null,
+          template: job.data.template,
+          to: job.data.to,
+          status,
+          messageId,
+          attempts,
+        }),
+      );
+    } catch (error: unknown) {
+      this.container.logger.failure(error, {
+        at: "mail.delivery.record",
+        template: job.data.template,
+      });
     }
   }
 

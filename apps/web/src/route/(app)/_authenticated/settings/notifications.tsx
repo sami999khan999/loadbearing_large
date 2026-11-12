@@ -1,5 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { type ClientNamespace, NotificationPreferenceForm, useMessages } from "~/import.js";
+import {
+  type ClientNamespace,
+  DigestHourForm,
+  NotificationPreferenceForm,
+  PushDeviceForm,
+  useCapabilities,
+  useMessages,
+} from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
 
 const MESSAGES = ["notification"] as const satisfies readonly ClientNamespace[];
@@ -15,11 +22,14 @@ export const Route = createFileRoute("/(app)/_authenticated/settings/notificatio
 
 function NotificationSettings() {
   const { t } = useMessages("notification");
+  const capabilities = useCapabilities();
 
   return (
     <main>
       <h1>{t("notification.preference.title")}</h1>
       <NotificationPreferenceForm />
+      <PushDeviceForm />
+      <DigestHourForm canManage={capabilities.can("notification.digest.manage")} />
     </main>
   );
 }

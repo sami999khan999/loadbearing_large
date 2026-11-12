@@ -11,13 +11,19 @@ import {
   useApiClient,
   useAppInfiniteQuery,
   useMemo,
+  useState,
 } from "../import.js";
+import { AttachmentList } from "./attachment.list.js";
+import { MentionText } from "./mention-text.js";
+import { ReactionBar } from "./reaction.bar.js";
+import { ThreadPanel } from "./thread.panel.js";
 
 export interface MessageListProps {
   readonly conversationId: string;
   // From the conversation this thread belongs to, which is where the names are. Absent
   // renders no author at all rather than a uuid, which is what it did before `23.26b`.
   readonly nameFor?: (userId: string) => string | null;
+  readonly mentionable?: readonly { readonly userId: string; readonly name: string }[];
 }
 
 // The page envelope, structurally: the contract's type is inferred per procedure and
@@ -27,11 +33,13 @@ interface MessagePage {
   readonly olderCursor: string | null;
 }
 
-export function MessageList({ conversationId, nameFor }: MessageListProps) {
+export function MessageList({ conversationId, nameFor, mentionable }: MessageListProps) {
   const { t } = useMessages("messaging");
   const describe = useErrorMessage();
   const client = useApiClient();
 
+  // One thread open at a time, under its root (`26.1`).
+  const [open, setOpen] = useState<string | null>(null);
   const thread = useAppInfiniteQuery(MessagingQueries.messages(client, conversationId));
 
   // Reversed: the server pages backwards from the newest, and a conversation reads
@@ -70,11 +78,41 @@ export function MessageList({ conversationId, nameFor }: MessageListProps) {
             {nameFor ? (
               <strong>{nameFor(row.authorId) ?? t("messaging.member.unknown")}</strong>
             ) : null}
-            {row.deleted ? <em>{t("messaging.conversation.deleted")}</em> : <span>{row.body}</span>}
+            {row.deleted ? (
+              <em>{t("messaging.conversation.deleted")}</em>
+            ) : (
+              <span>{MentionText.render(row.body, nameFor)}</span>
+            )}
             <small>
               {DateFormat.day(row.createdAt)}
               {row.editedAt ? ` · ${t("messaging.conversation.edited")}` : ""}
             </small>
+            {
+              // Not on a row the server has not confirmed: its id is the client's, and a
+              // reaction to it would name a message that does not exist.
+              row.deleted || row.id === row.clientId ? null : (
+                <>
+                  <AttachmentList message={row} />
+                  <ReactionBar message={row} />
+                  <Button
+                    variant="secondary"
+                    aria-expanded={open === row.id}
+                    onClick={() => setOpen(open === row.id ? null : row.id)}
+                  >
+                    {row.replyCount > 0
+                      ? t("messaging.thread.replies", { count: row.replyCount })
+                      : t("messaging.thread.reply")}
+                  </Button>
+                </>
+              )
+            }
+            {open === row.id ? (
+              <ThreadPanel
+                root={row}
+                {...(nameFor ? { nameFor } : {})}
+                {...(mentionable ? { mentionable } : {})}
+              />
+            ) : null}
           </li>
         ))}
       </ol>

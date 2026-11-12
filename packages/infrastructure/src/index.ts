@@ -9,9 +9,12 @@ export { type CannedAssistantConfig, CannedAssistantModel } from "./canned/index
 export {
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
+  ClickHouseAssistantUsageProjector,
+  ClickHouseAssistantUsageReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
+export { AesGcmSecretCipher } from "./crypto/index.js";
 export {
   type GeminiAssistantConfig,
   GeminiAssistantModel,
@@ -51,13 +54,18 @@ export {
   PgFlagRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
+  PgMailDeliveryRepository,
+  PgMailSettingsRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgMessageAttachmentRepository,
+  PgMessageReactionRepository,
   PgMessageRepository,
   PgNotificationPreferenceRepository,
   PgNotificationRecipientReader,
   PgNotificationRepository,
+  PgNotificationSettingsRepository,
   PgOrganizationFounder,
   PgOrganizationReader,
   PgOutboxGateway,
@@ -68,6 +76,7 @@ export {
   PgPlatformPolicyRepository,
   PgPlatformReader,
   PgProjectionPolicyRepository,
+  PgPushSubscriptionRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgShardAssignmentRepository,
@@ -97,6 +106,7 @@ export {
   RedisCacheStore,
   type RedisConfig,
   RedisConnection,
+  RedisPresenceReader,
   RedisRateLimitStore,
   type RedisRealtimeConfig,
   RedisRealtimePublisher,
@@ -112,5 +122,6 @@ export {
   S3StoragePolicyGateway,
   StorageKey,
 } from "./s3/index.js";
-export { type SmtpConfig, SmtpEmailSender } from "./smtp/index.js";
+export { type SmtpConfig, SmtpEmailSender, SmtpEmailSenderResolver } from "./smtp/index.js";
 export { UnifiedMarkdownRenderer } from "./unified/index.js";
+export { type RenderedPush, type WebPushConfig, WebPushSender } from "./web-push/index.js";

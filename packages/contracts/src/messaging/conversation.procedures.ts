@@ -49,10 +49,16 @@ export class ConversationProcedures {
     .input(ConversationContract.markRead)
     .output(Envelope.acknowledged);
 
+  public static readonly presence = oc
+    .route({ method: "GET", path: "/conversations/{conversationId}/presence" })
+    .input(ConversationContract.get)
+    .output(ConversationContract.presence);
+
   public static readonly all = {
     list: ConversationProcedures.list,
     create: ConversationProcedures.create,
     get: ConversationProcedures.get,
+    presence: ConversationProcedures.presence,
     addMember: ConversationProcedures.addMember,
     removeMember: ConversationProcedures.removeMember,
     leave: ConversationProcedures.leave,
