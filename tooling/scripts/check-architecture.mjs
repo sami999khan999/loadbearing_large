@@ -486,6 +486,8 @@ assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
 
     for (const file of walk(dir, [".ts", ".tsx", ".md"])) {
       if (AUDIT_NAME_EXEMPT.has(rel(file))) continue;
+      // An archived plan is the record of what was believed then, the drift included.
+      if (rel(file).startsWith("docs/plans/archive/")) continue;
 
       const source = readFileSync(file, "utf8");
       if (source.includes("AuditTrail")) {
@@ -837,7 +839,8 @@ function docFiles() {
     out.push(...walk(join(dir, "docs"), [".md"]));
   }
 
-  return out;
+  // A plan names the files it is about to create, so its paths are promises, not facts.
+  return out.filter((file) => !rel(file).startsWith("docs/plans/"));
 }
 
 // The package or app a doc belongs to, so `docs/reference/x.md` inside it resolves the
