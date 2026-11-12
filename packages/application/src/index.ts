@@ -512,6 +512,7 @@ export {
   type PartitionEstimate,
   PresenceReader,
   type PresignedPost,
+  ProjectionBacklogStore,
   type ProjectionCheckpoint,
   type ProjectionGap,
   type PushPayload,
