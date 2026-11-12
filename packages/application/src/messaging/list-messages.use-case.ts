@@ -2,6 +2,7 @@ import type { ListMessagesInput } from "../import.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationAccess } from "./conversation-access.js";
 import type { MessagePageResult, MessageRepository } from "./message.repository.js";
+import type { MessageArchive } from "./message-archive.js";
 import type { MessageAttachmentRepository } from "./message-attachment.repository.js";
 import type { MessageReactionRepository } from "./message-reaction.repository.js";
 
@@ -13,6 +14,8 @@ export class ListMessagesUseCase {
     // Absent in a spec about paging alone; the page then carries no reactions.
     private readonly reactions: MessageReactionRepository | null = null,
     private readonly attachments: MessageAttachmentRepository | null = null,
+    // Absent in a deployment with no cold storage, where no month ever leaves.
+    private readonly archive: MessageArchive | null = null,
   ) {}
 
   public async execute(actor: Principal, input: ListMessagesInput): Promise<MessagePageResult> {
@@ -32,7 +35,13 @@ export class ListMessagesUseCase {
       before: input.before,
       upTo: conversation.lastMessageAt,
     });
-    if (page.items.length === 0) return page;
+    // The oldest page says what lies before it in cold storage (`26.4`). Asked only there:
+    // a page with older rows still to read has nothing archived to point at yet.
+    const archivedThrough =
+      page.olderCursor === null && this.archive
+        ? await this.archive.archivedThrough(actor.organizationId, conversation.createdAt)
+        : null;
+    if (page.items.length === 0) return { ...page, archivedThrough };
 
     // One query for the page, inside the months it already read (`26.1`).
     const times = page.items.map((item) => item.createdAt.getTime());
@@ -52,6 +61,7 @@ export class ListMessagesUseCase {
     ]);
     return {
       ...page,
+      archivedThrough,
       items: page.items.map((item) => ({
         ...item,
         reactions: summaries?.get(item.id) ?? [],

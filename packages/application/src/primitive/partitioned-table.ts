@@ -80,15 +80,15 @@ const ALL = Object.freeze([
     column: null,
     retentionMonths: null,
   }),
-  // Never dropped by the calendar: messages are domain data, so the month level buys a
-  // manageable table and a ready archive path rather than a retention policy.
+  // Never archived by default: messages are domain data. A retention row may archive old
+  // months to cold storage with their group (`26.4`); nothing ever drops one.
   Object.freeze({
     name: MESSAGES,
     tenantKey: "organization_id",
     column: "created_at",
     retentionMonths: null,
   }),
-  // A message's reactions (`26.1`), in its month, kept as long as the message is: D47.
+  // A message's reactions (`26.1`), in its month, archived only with its messages (`26.4`).
   Object.freeze({
     name: MESSAGE_REACTIONS,
     tenantKey: "organization_id",
@@ -254,4 +254,22 @@ export class PartitionedTable {
   public static readonly NAMES: readonly PartitionedTableName[] = Object.freeze(
     ALL.map((entry) => entry.name),
   );
+
+  // `26.4`, superseding D47: a message month may leave for cold storage, but only with its
+  // reactions and files, always archived, never dropped and never expired there.
+  public static readonly MESSAGE_GROUP: readonly PartitionedTableName[] = Object.freeze([
+    MESSAGES,
+    MESSAGE_REACTIONS,
+    MESSAGE_ATTACHMENTS,
+  ]);
+
+  // Domain data: what a person wrote. A month of it is archived and restorable, never lost.
+  public static isDomainData(name: string): boolean {
+    return (PartitionedTable.MESSAGE_GROUP as readonly string[]).includes(name);
+  }
+
+  // The tables a policy or a restore of `name` moves together; itself alone for any other.
+  public static groupOf(name: PartitionedTableName): readonly PartitionedTableName[] {
+    return PartitionedTable.isDomainData(name) ? PartitionedTable.MESSAGE_GROUP : [name];
+  }
 }

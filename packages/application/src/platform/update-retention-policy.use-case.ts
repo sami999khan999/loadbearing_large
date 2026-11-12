@@ -50,6 +50,7 @@ export class UpdateRetentionPolicyUseCase {
 
     UpdateRetentionPolicyUseCase.assertKnownTable(input);
     UpdateRetentionPolicyUseCase.assertMonths(input);
+    UpdateRetentionPolicyUseCase.assertDomainData(input);
 
     // Rebased onto the tier: a platform admin's active tenant is whichever they switched
     // to, and an audit row under it would say a customer changed a global setting.
@@ -60,8 +61,14 @@ export class UpdateRetentionPolicyUseCase {
       actor.kind,
     );
 
+    // A message month moves with its reactions and files, so one save writes the group.
+    const tables =
+      input.store === "postgres" && PartitionedTable.isDomainData(input.tableName)
+        ? PartitionedTable.MESSAGE_GROUP
+        : [input.tableName];
+
     await this.unitOfWork.run(async () => {
-      await this.policies.save({ ...input });
+      for (const tableName of tables) await this.policies.save({ ...input, tableName });
       await this.activity.record(auditor, "platform.policy.changed", {
         store: input.store,
         tableName: input.tableName,
@@ -111,6 +118,21 @@ export class UpdateRetentionPolicyUseCase {
         : (PartitionedTable.NAMES as readonly string[]).includes(input.tableName);
 
     if (!known) throw new ValidationError([{ field: "tableName", rule: "unknown" }]);
+  }
+
+  // `26.4`: what a person wrote is archived and restorable, never dropped or expired, and
+  // the group is set through `messages` alone so its three tables cannot drift apart.
+  private static assertDomainData(input: UpdateRetentionPolicyInput): void {
+    if (input.store !== "postgres" || !PartitionedTable.isDomainData(input.tableName)) return;
+    if (input.tableName !== PartitionedTable.MESSAGES) {
+      throw new ValidationError([{ field: "tableName", rule: "group" }]);
+    }
+    if (input.coldMode !== "archive") {
+      throw new ValidationError([{ field: "coldMode", rule: "domainData" }]);
+    }
+    if (input.coldMonths !== null) {
+      throw new ValidationError([{ field: "coldMonths", rule: "domainData" }]);
+    }
   }
 
   // The same two bounds the check constraints hold. Here for the message; there for the

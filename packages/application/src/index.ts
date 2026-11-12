@@ -230,6 +230,7 @@ export {
   ListMessagesUseCase,
   ListThreadUseCase,
   MarkConversationReadUseCase,
+  MessageArchive,
   MessageAttachmentKey,
   type MessageAttachmentRecord,
   MessageAttachmentRepository,

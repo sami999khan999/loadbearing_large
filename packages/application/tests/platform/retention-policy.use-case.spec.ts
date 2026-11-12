@@ -186,3 +186,53 @@ describe("ListRetentionPoliciesUseCase — what the screen calls expected", () =
     expect(listed.clickhouse?.expected).toBe(listed.clickhouse?.applied);
   });
 });
+
+// `26.4`, reopening D47: message months may be archived, but only as one group, and what a
+// person wrote is never dropped or expired.
+describe("UpdateRetentionPolicyUseCase — the message group", () => {
+  const build = (retention: FakeRetention) =>
+    new UpdateRetentionPolicyUseCase(
+      new Authorizer(),
+      retention as unknown as RetentionPolicyRepository,
+      storagePolicy,
+      platform,
+      activity,
+      unitOfWork,
+      null,
+      new FakeProjection(),
+      () => undefined,
+    );
+  const messages = {
+    store: "postgres" as const,
+    tableName: "messages",
+    hotMonths: 24,
+    coldMonths: null,
+    coldMode: "archive" as const,
+  };
+
+  it("writes messages, its reactions and its files together", async () => {
+    const retention = new FakeRetention();
+    await build(retention).execute(actor("platform.retention.manage"), messages);
+
+    expect(retention.saved.map((row) => [row.tableName, row.hotMonths])).toEqual([
+      ["messages", 24],
+      ["message_reactions", 24],
+      ["message_attachments", 24],
+    ]);
+  });
+
+  it("refuses to drop a month, to expire one in cold, or to set a follower alone", async () => {
+    const use = build(new FakeRetention());
+    const as = actor("platform.retention.manage");
+
+    await expect(use.execute(as, { ...messages, coldMode: "drop" })).rejects.toMatchObject({
+      fields: [{ field: "coldMode", rule: "domainData" }],
+    });
+    await expect(use.execute(as, { ...messages, coldMonths: 12 })).rejects.toMatchObject({
+      fields: [{ field: "coldMonths", rule: "domainData" }],
+    });
+    await expect(
+      use.execute(as, { ...messages, tableName: "message_reactions" }),
+    ).rejects.toMatchObject({ fields: [{ field: "tableName", rule: "group" }] });
+  });
+});

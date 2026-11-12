@@ -13,6 +13,8 @@ export interface PartitionArchiveEntry {
   readonly checksum: string;
   readonly actionCounts: Readonly<Record<string, number>>;
   readonly projectedAt: Date | null;
+  // Set while a restored month is held in Postgres (`26.4`); past or null, it is cold only.
+  readonly heldUntil: Date | null;
 }
 
 // One page of one user's rows out of one archived object. The cursor is opaque here

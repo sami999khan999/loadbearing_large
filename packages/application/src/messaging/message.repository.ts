@@ -29,6 +29,7 @@ export interface MessageRecord {
 export interface ThreadPageResult {
   readonly items: readonly MessageRecord[];
   readonly newerCursor: string | null;
+  readonly rootArchived?: boolean;
 }
 
 export interface ReactionSummary {
@@ -40,6 +41,7 @@ export interface ReactionSummary {
 export interface MessagePageResult {
   readonly items: readonly MessageRecord[];
   readonly olderCursor: string | null;
+  readonly archivedThrough?: string | null;
 }
 
 export interface MessageQuery {
