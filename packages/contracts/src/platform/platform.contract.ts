@@ -54,6 +54,10 @@ export class PlatformContract {
     // nobody has decided" reads differently on a screen from "12".
     isDefault: z.boolean(),
     neverDropped: z.boolean(),
+    // `26.4`. Domain data is archived only, never dropped or expired; `follows` names the
+    // table whose setting a group member takes, so the screen offers it nowhere else.
+    domainData: z.boolean().optional(),
+    follows: z.string().nullable().optional(),
   });
 
   public static readonly clickhouseRetention = z.object({

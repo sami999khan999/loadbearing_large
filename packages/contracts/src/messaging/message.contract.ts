@@ -104,12 +104,17 @@ export class MessageContract {
     // Null is the start of the conversation. Not the same as an empty page: a full page
     // can still be the oldest one.
     olderCursor: z.string().nullable(),
+    // Set on the oldest page when earlier months are in cold storage (`26.4`): the first
+    // of the newest archived month, `YYYY-MM-01`. Absent or null, nothing is archived.
+    archivedThrough: z.string().nullable().optional(),
   });
 
   public static readonly threadPage = z.object({
     items: z.array(MessageContract.entity).readonly(),
     // Null is the end of the thread so far.
     newerCursor: z.string().nullable(),
+    // The root's month is in cold storage, so the replies have no message to hang from.
+    rootArchived: z.boolean().optional(),
   });
 
   public static readonly send = z
