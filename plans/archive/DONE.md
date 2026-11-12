@@ -2109,6 +2109,12 @@ found and did not fix is `BACKLOG.md` §23.
   `doc-grant.panel.spec.tsx`. `6edd4fec`.
 - [x] `WK.6` **A grant's reason did not say it was required** — the hint starts "Required." and
   target and reason carry `required`. `doc-grant.panel.spec.tsx`. `486f4507`, `6edd4fec`.
+- [x] `WK.7` **The app shell had no layout** — decided with the owner 2026-11-12: the signed-in
+  pages sit in `AppLayout`, the module nav and account links in the `Sidebar` (a drawer below
+  64rem), the organization switcher at its head, locale and sign-out at its foot, the bell in a
+  top bar. The logo is a mask painted with `--fg`; an `<img>`'s `currentColor` drew it black.
+  Walked: the current page is marked, the drawer traps focus, Escape returns it to the menu
+  button, and a link closes the drawer. `app-layout.spec.tsx`. `48e1e311..54b269f8`.
 
 
 ---

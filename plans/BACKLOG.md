@@ -33,7 +33,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 0 | 16 |
 | 19 | Review of 2026-10-10 | 0 | 23 |
-| 23 | Found walking the big kit in a browser, 2026-11-12 | 1 | 11 |
+| 23 | Found walking the big kit in a browser, 2026-11-12 | 0 | 12 |
 
 Sections 2, 4, 5, 7, 8, 9, 10, 12, 15, 16, 17, 18, 20, 21 and 22 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
@@ -44,7 +44,7 @@ closed 15, 16, 17 and 22. Their entries are in `archive/DONE.md`, the walks unde
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
 **Section 11 is down to two that need a decision or hardware**: `26.4` reopens D47, and `26.8`
 needs a machine that holds 250 000 users. **Section 13 is a trigger**, `AX11.2`. **Section 23 is
-one decision**, `WK.7`: whether the kit ships a styled app shell.
+closed.**
 
 ---
 
@@ -162,13 +162,8 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
 
 `DC.9`, `UI.1`, `LP.1`, `LP.3` and `AI.2` were walked and measured on 2026-11-12, in headless
 Chromium over the DevTools protocol; they are in [`archive/DONE.md`](archive/DONE.md) §23 with
-five fixes found on the way. Seven more were found and logged as `WK.<n>`; six were fixed the
-same day and are there too. One is left, and it is a decision.
-
-- [ ] `WK.7` **The app shell has no layout.** `_authenticated.tsx` renders a bare `<header>`:
-  underlined links in a row, no sidebar, the logo painted black. It has been so since
-  2026-09-29, and the component library has a `Sidebar`. A decision more than a defect: whether
-  the kit ships a styled shell.
+five fixes found on the way. Seven more were found and logged as `WK.<n>`, all closed the same
+day and there too.
 
 ---
 
