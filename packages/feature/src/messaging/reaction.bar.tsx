@@ -52,6 +52,7 @@ export function ReactionBar({ message }: ReactionBarProps) {
       {given.size < EMOJI.length ? (
         <Select
           label={t("messaging.reaction.add")}
+          placeholder={t("messaging.reaction.add")}
           value={null}
           onValueChange={(emoji) => toggle(emoji as MessageEmoji, true)}
           options={EMOJI.filter((emoji) => !given.has(emoji)).map((emoji) => ({

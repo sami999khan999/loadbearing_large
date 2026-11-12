@@ -110,6 +110,7 @@ export function MessageComposer({
       {mentionable.length > 0 ? (
         <Select
           label={t("messaging.compose.mention")}
+          placeholder={t("messaging.compose.mention")}
           value={null}
           placement="above"
           onValueChange={(userId) => {
