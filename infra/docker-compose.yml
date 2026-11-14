@@ -120,8 +120,14 @@ services:
     ports: ["${POSTGRES_REPLICA_PORT:-15434}:5432"]
     volumes:
       - pgreplicadata:/var/lib/postgresql/data
+    # Streaming, not merely accepting connections: a standby stopped until the primary
+    # recycled its WAL answers `pg_isready` for ever and never catches up.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ratchet -d ratchet"]
+      test:
+        [
+          "CMD-SHELL",
+          "psql -U ratchet -d ratchet -tAc \"select status from pg_stat_wal_receiver\" | grep -q streaming",
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
