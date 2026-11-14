@@ -83,6 +83,11 @@ any grant. So an owner space never reaches `/llms.txt` or the public reader. A g
 refused (`error.field.private`), and only the author may switch a space to `owner`
 (`DocRules.assertAudienceChange`). `doc_spaces_owner_idx` covers the author's lookup.
 
+**A private space's address ends in six random characters** (`BL.16`). Slugs are unique per
+organization, so a manager creating `notes` used to be told `slug: taken` by someone's private
+`notes`, which said that it existed. `DocRules.storedSlug` adds the ending whenever a space becomes
+`owner` or a private one is renamed, and keeps it while the address is unchanged; the form says so.
+
 | Viewer | `members` | `public` | `granted` | `owner` |
 |---|---|---|---|---|
 | the author, a member | reads | reads | reads | reads |
@@ -91,7 +96,15 @@ refused (`error.field.private`), and only the author may switch a space to `owne
 | a signed-out visitor | `NOT_FOUND` | reads | `NOT_FOUND` | `NOT_FOUND` |
 
 The platform organization's `public` and `granted` spaces are read from outside through
-`DocAccess.canRead`. The table's middle two columns apply to them there.
+`DocAccess.canRead`. The table's middle two columns apply to them there. A platform `owner` space
+is read by its author only inside the platform organization (`FC.11`).
+
+**An `owner` space outlives its author only until a manager deletes it** (`BL.15`). Once the
+author is no longer an active member, `ListOrphanedDocSpacesUseCase` names the space to holders of
+`doc.space.manage`, by its slug alone, on the manage page under "Private spaces of former members".
+`DeleteDocSpaceUseCase` then deletes it unread. Nothing else changes: the title and the pages stay
+`NOT_FOUND` to everyone, and a deactivated author who is reactivated finds the space as they left
+it, unless it was deleted in between.
 
 Outside it, `DocAccess.canRead` decides. A grant reaches a viewer three ways: to them by name, to
 their active organization, or to that organization's plan. **The plan is how a private space rides
