@@ -1,5 +1,5 @@
 import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@loadbearing/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@loadbearing/errors";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { FlagCache } from "../../src/flag/flag.cache.js";
