@@ -99,6 +99,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | `doc-editor.form.tsx` | `DocEditorForm`: the page editor: title, description, slug, icon, Markdown with live preview, image upload, access links, autosave of the draft, and Publish. It reports unsaved edits, so the route can ask before leaving. |
 | `doc-grant.panel.tsx` | `DocGrantPanel`: lists who a granted platform space is open to and adds or removes grants (organization, person or plan, with reason and end date). |
 | `doc-nav-tree.ts` | `DocNavTree`: turns a space's published sidebar data into links for the sidebar, breadcrumbs, previous/next and the search palette, so they all agree. |
+| `doc-orphaned-space.list.tsx` | `DocOrphanedSpaceList`: on the manage page, the private spaces of former members, by address, each with a two-step Delete. |
 | `doc-page-tree.list.tsx` | `DocPageTreeList`: the editor's page tree, drafts included, with adding, moving and reordering pages. |
 | `doc-reader.panel.tsx` | `DocReaderPanel`: the whole docs reader: sidebar with space switcher and search, breadcrumbs, the page, Copy Markdown and the Open menu (ChatGPT, Claude, GitHub), previous and next, and "On this page". Serves both `/doc` and `/docs`. |
 | `doc-revision.list.tsx` | `DocRevisionList`: a page's published versions, newest first, with Restore (back into the draft). |

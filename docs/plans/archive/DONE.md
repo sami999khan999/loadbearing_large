@@ -1556,6 +1556,19 @@ in this file's history of `BACKLOG.md` §15.
   the query and returns nothing, as `/docs/$space/$` does, so the HTML rides only in the stripped
   query cache. Proof: `apps/web/tests/route/doc-loader.spec.ts` fails on the old loader. Not
   measured on a signed-in production page. `3509ecc7`.
+- [x] `LP.4` **A platform `owner` space was readable by its author from any organization**
+  `done: 2026-11-14` — lite's `FC.11`, owed here since `owner` came over on 2026-10-03. Someone
+  removed from the platform organization kept reading by signing in under another tenant.
+  `DocAccess.canRead` now also asks for the platform organization. Proof: `doc-access.spec`.
+  Lite `58d22992`.
+- [x] `LP.5` **An `owner` space outlived its author** `done: 2026-11-14` — lite's `BL.15`. Once
+  the author is no longer an active member, a holder of `doc.space.manage` sees the space by slug
+  on the manage page and may delete it, unread. The membership is read before the routed
+  transaction. Proof: `doc-orphaned-space.spec`, `doc-orphaned-space.list.spec`. Lite `9187d5eb`,
+  `68112899`, `15ba660f`.
+- [x] `LP.6` **A slug taken by someone's private space said so** `done: 2026-11-14` — lite's
+  `BL.16`. A private space's address ends in six random characters, so a manager's `notes` never
+  meets it. Proof: `doc.rules.spec`. Lite `4724f37d`.
 
 ## 18. Found while building — closed
 
@@ -1644,7 +1657,8 @@ false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless t
 ## 20. Final check of 2026-10-10 — closed in full
 
 Three Sonnet reviewers read mini first and the code both kits share, each finding checked against
-both. IDs are `FC.<n>`. `FC.11` and `FC.12` are lite's own and are fixed only there. Proof for each
+both. IDs are `FC.<n>`. `FC.11` and `FC.12` were lite's own and fixed only there at the time; both
+are here since, `FC.12` with `AI.0` and `FC.11` as §17 `LP.4`. Proof for each
 is a spec that fails without the fix, unless the entry says otherwise.
 
 - [x] `FC.1` **Re-indexing the same text was swallowed for up to a week** `done: 2026-10-10` —
@@ -2138,6 +2152,7 @@ found and did not fix is `BACKLOG.md` §23.
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-14 | @sami | **Three lite fixes that never crossed, §17 `LP.4`–`LP.6`:** a platform `owner` space reads only inside the platform organization, a departed author's private space is a manager's to delete, and a private address ends in six random characters |
 | 2026-11-12 | @sami | **`26.4` built, superseding D47:** message months may go to cold storage as one group, never dropped, restored and held by a platform admin; the conversation says what is archived. And `WK.7`, the sidebar shell |
 | 2026-11-12 | @sami | **`WK.1`–`WK.6` closed:** starting a conversation, picker placeholders, the saved line, retention's untouched form, grant focus and the required reason. `WK.7` waits on a decision |
 | 2026-11-12 | @sami | **The browser walks and the benchmark:** `UI.1`, `DC.9`, `LP.1`, `LP.3` and `AI.2` closed, five fixes on the way and seven findings opened as `WK.1`–`WK.7` |
