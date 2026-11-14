@@ -55,6 +55,8 @@ export const doc: NamespaceBundle<"doc"> = {
   "doc.manage.pages": "পাতা",
   "doc.space.slug": "ঠিকানা",
   "doc.space.slugHint": "ছোট হাতের অক্ষর, সংখ্যা ও হাইফেন। এটিই স্পেসের URL হবে।",
+  "doc.space.privateSlugHint":
+    "ছোট হাতের অক্ষর, সংখ্যা ও হাইফেন। ব্যক্তিগত স্পেসের ঠিকানার শেষে একটি এলোমেলো অংশ যোগ হয়, যাতে কেউ তা অনুমান করতে না পারে।",
   "doc.space.title": "শিরোনাম",
   "doc.space.description": "বিবরণ",
   "doc.space.icon": "আইকন",
@@ -71,6 +73,13 @@ export const doc: NamespaceBundle<"doc"> = {
   "doc.space.save": "স্পেস সংরক্ষণ করুন",
   "doc.space.saved": "স্পেস সংরক্ষিত হয়েছে।",
   "doc.space.delete": "স্পেস মুছুন",
+  "doc.orphan.title": "সাবেক সদস্যদের ব্যক্তিগত স্পেস",
+  "doc.orphan.description":
+    "এগুলোর লেখক আর সক্রিয় সদস্য নন, তাই অন্য কেউ এগুলো খুলতে পারেন না। শুধু ঠিকানা দেখানো হয়। মুছলে এর সব পাতা ও ছবি মুছে যাবে।",
+  "doc.orphan.delete": "মুছুন",
+  "doc.orphan.deleteFor": "ব্যক্তিগত স্পেস {slug} মুছুন",
+  "doc.orphan.confirm": "এটি ও এর সব পাতা মুছুন",
+  "doc.orphan.confirmFor": "নিশ্চিত করুন: ব্যক্তিগত স্পেস {slug} ও এর সব পাতা মুছুন",
   "doc.space.deleteConfirm": "{title} ও এর সব পাতা মুছুন",
   "doc.space.open": "পড়ুন",
   "doc.space.edit": "পাতা",

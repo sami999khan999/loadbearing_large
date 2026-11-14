@@ -60,6 +60,7 @@ export type {
   DocSpaceId,
   DocSpaceListDto,
   DocSpaceNavDto,
+  DocSpaceOrphanListDto,
   DocSpaceRefInput,
   DocumentHitDto,
   EditMessageInput,

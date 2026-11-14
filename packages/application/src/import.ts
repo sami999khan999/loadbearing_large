@@ -55,6 +55,7 @@ export {
   type DocSpaceListDto,
   type DocSpaceNavDto,
   type DocSpaceNavInput,
+  type DocSpaceOrphanListDto,
   type DocSpaceRefInput,
   type DocTocEntryDto,
   type DomainEvent,

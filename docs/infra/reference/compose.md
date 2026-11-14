@@ -107,6 +107,11 @@ primary when `$PGDATA` holds no `PG_VERSION`. `-R` writes `standby.signal` and t
 string, so the image's own entrypoint then finds a data directory and starts a standby rather
 than running `initdb`. To re-clone, remove the `pgreplicadata` volume and start it again.
 
+**A standby left stopped falls behind for good.** It holds no replication slot, so the primary
+recycles WAL the standby still needs, and the standby then logs `requested WAL segment … has
+already been removed` every five seconds while still accepting connections. Its healthcheck asks
+`pg_stat_wal_receiver` for `streaming`, so that state shows as unhealthy; re-clone it as above.
+
 **The primary needed one line for it.** The image's `pg_hba.conf` allows replication from
 localhost only. `infra/pg_hba.conf` restates the image's rules and adds `host replication all all
 scram-sha-256`, and the primary is started with `hba_file` pointing at it. Mounted rather than

@@ -20,7 +20,7 @@ machine setup, test data, how each phase was checked, and the traps that cost ti
 - **What is open is [`BACKLOG.md`](BACKLOG.md).** The walks' findings `WK.1`–`WK.7` closed the
   same day, the shell as a sidebar, and `26.4` was built, superseding D47. The rest waits on
   hardware, traffic or a trigger.
-- **`check:architecture` is 32/32.** `pnpm test` runs 2,630 tests and `pnpm smoke` 55.
+- **`check:architecture` is 32/32.** `pnpm test` runs 2,639 tests and `pnpm smoke` 56.
 - The access and visibility plan, built 2026-09-28 to 30, is archived in
   [`ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md).
 
@@ -37,7 +37,7 @@ pnpm infra:up                    # postgres, pgbouncer, 2× redis, minio, mailpi
 pnpm db:migrate                  # every node; creates every tenant's partitions
 pnpm db:seed                     # grants platform keys (incl. platform.account.*) to platform_admin
 pnpm build:packages && pnpm --filter @loadbearing/web build   # before typecheck: the route tree is generated
-pnpm check:architecture          # expect 31/31 with no "○ skipped"
+pnpm check:architecture          # expect 32/32 with no "○ skipped"
 pnpm typecheck && pnpm lint && pnpm test
 pnpm dev                         # web on http://localhost:13000, Mailpit on :18025
 ```

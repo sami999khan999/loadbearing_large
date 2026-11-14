@@ -1,5 +1,10 @@
-import type { DocSpaceRefInput } from "../import.js";
-import type { ActivityLogger, DomainEventPublisher, UnitOfWork } from "../port/index.js";
+import type { DocSpaceId, DocSpaceRefInput, UserId } from "../import.js";
+import type {
+  ActivityLogger,
+  DomainEventPublisher,
+  TenantMembershipReader,
+  UnitOfWork,
+} from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { DocCache } from "./doc.cache.js";
 import { DocRules } from "./doc.rules.js";
@@ -15,6 +20,7 @@ export class DeleteDocSpaceUseCase {
   public constructor(
     private readonly authorizer: Authorizer,
     private readonly spaces: DocSpaceRepository,
+    private readonly memberships: TenantMembershipReader,
     private readonly pages: DocPageRepository,
     private readonly grants: DocGrantRepository,
     private readonly access: DocAccess,
@@ -28,13 +34,16 @@ export class DeleteDocSpaceUseCase {
   public async execute(actor: Principal, input: DocSpaceRefInput): Promise<void> {
     this.authorizer.assert(actor, "doc.space.manage");
 
+    // Another author's `owner` space is not found, unless that author has left: then it is
+    // a manager's to delete, unread. Asked first: memberships are catalog, never routed.
+    const orphanedBy = await this.departedAuthor(actor, input.spaceId);
+
     const space = await this.unitOfWork.run(async () => {
-      const found = DocRules.assertVisible(
-        await this.spaces.findById(actor.organizationId, input.spaceId),
-        actor.userId,
-        "doc.space",
-        input.spaceId,
-      );
+      const candidate = await this.spaces.findById(actor.organizationId, input.spaceId);
+      const found =
+        candidate !== null && orphanedBy !== null && candidate.createdBy === orphanedBy
+          ? candidate
+          : DocRules.assertVisible(candidate, actor.userId, "doc.space", input.spaceId);
 
       // Before the delete, which is the last moment the pages can be listed.
       const pageIds = (await this.pages.listBySpace(actor.organizationId, input.spaceId)).map(
@@ -60,5 +69,15 @@ export class DeleteDocSpaceUseCase {
     await this.cache.forget(actor.organizationId, space.slug);
     // Last: an image that outlives a failure here is unreachable, since its space is gone.
     await this.images.sweep(DocImageKey.spacePrefix(actor.organizationId, input.spaceId));
+  }
+
+  // The author of another member's `owner` space when they are no longer an active member.
+  private async departedAuthor(actor: Principal, spaceId: DocSpaceId): Promise<UserId | null> {
+    const space = await this.spaces.findById(actor.organizationId, spaceId);
+    if (space === null || space.audience !== "owner" || space.createdBy === actor.userId) {
+      return null;
+    }
+    const active = await this.memberships.isActiveMember(actor.organizationId, space.createdBy);
+    return active ? null : space.createdBy;
   }
 }

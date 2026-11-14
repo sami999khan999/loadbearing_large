@@ -128,6 +128,7 @@ import {
   ListMessagesUseCase,
   ListModuleSwitchesUseCase,
   ListNotificationsUseCase,
+  ListOrphanedDocSpacesUseCase,
   ListPermissionOverridesUseCase,
   ListPlansUseCase,
   ListPlatformDocSpacesUseCase,
@@ -739,6 +740,7 @@ export class Container {
   public readonly doc: {
     readonly cache: DocCache;
     readonly listSpaces: ListDocSpacesUseCase;
+    readonly listOrphanedSpaces: ListOrphanedDocSpacesUseCase;
     readonly getSpace: GetDocSpaceUseCase;
     readonly createSpace: CreateDocSpaceUseCase;
     readonly updateSpace: UpdateDocSpaceUseCase;
@@ -2384,6 +2386,7 @@ export class Container {
     return {
       cache,
       listSpaces: new ListDocSpacesUseCase(auth, cache, features),
+      listOrphanedSpaces: new ListOrphanedDocSpacesUseCase(auth, cache, this.tenantMemberships),
       getSpace: new GetDocSpaceUseCase(auth, spaces),
       createSpace: new CreateDocSpaceUseCase(
         auth,
@@ -2406,6 +2409,7 @@ export class Container {
       deleteSpace: new DeleteDocSpaceUseCase(
         auth,
         spaces,
+        this.tenantMemberships,
         pages,
         grants,
         access,

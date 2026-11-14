@@ -71,6 +71,7 @@ export {
   DocEditorForm,
   DocGrantPanel,
   DocNavTree,
+  DocOrphanedSpaceList,
   DocPageTreeList,
   DocReaderPanel,
   DocRevisionList,
