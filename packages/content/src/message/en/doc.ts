@@ -57,6 +57,8 @@ export const doc = {
   "doc.manage.pages": "Pages",
   "doc.space.slug": "Address",
   "doc.space.slugHint": "Lower-case letters, numbers and hyphens. It becomes the space's URL.",
+  "doc.space.privateSlugHint":
+    "Lower-case letters, numbers and hyphens. A private space's address gets a random ending, so nobody can guess it.",
   "doc.space.title": "Title",
   "doc.space.description": "Description",
   "doc.space.icon": "Icon",
@@ -76,6 +78,13 @@ export const doc = {
   "doc.space.saved": "Space saved.",
   "doc.space.delete": "Delete space",
   "doc.space.deleteConfirm": "Delete {title} and every page in it",
+  "doc.orphan.title": "Private spaces of former members",
+  "doc.orphan.description":
+    "Their authors are no longer active members, so nobody else can open them. Only the address is shown. Deleting one removes every page and image in it.",
+  "doc.orphan.delete": "Delete",
+  "doc.orphan.deleteFor": "Delete the private space {slug}",
+  "doc.orphan.confirm": "Delete it and every page",
+  "doc.orphan.confirmFor": "Confirm: delete the private space {slug} and every page in it",
   "doc.space.open": "Read",
   "doc.space.edit": "Pages",
 
