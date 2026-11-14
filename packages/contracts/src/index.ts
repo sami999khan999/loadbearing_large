@@ -69,6 +69,7 @@ export {
   type DocSpaceListDto,
   type DocSpaceNavDto,
   type DocSpaceNavInput,
+  type DocSpaceOrphanListDto,
   DocSpaceProcedures,
   type DocSpaceRefInput,
   type DocSpaceViewDto,
