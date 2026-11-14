@@ -134,6 +134,7 @@ export {
   ListMessagesUseCase,
   ListModuleSwitchesUseCase,
   ListNotificationsUseCase,
+  ListOrphanedDocSpacesUseCase,
   ListPermissionOverridesUseCase,
   ListPlansUseCase,
   ListPlatformDocSpacesUseCase,
