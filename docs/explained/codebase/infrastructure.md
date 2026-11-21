@@ -30,7 +30,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 | `drizzle.config.ts` | Settings for drizzle-kit, the tool that generates database migrations from the schema files and opens Drizzle Studio. Reads the database URL from `.env`. |
 | `highlight-js.d.ts` | A small type stand-in for the code highlighting library, so its browser types do not leak into this server package. |
 | `migrate.ts` | `pnpm db:migrate`: applies every pending migration to every database node (catalog first), then creates each organization's table partitions. |
-| `package.json` | The package manifest: its name, its build, test and type-check scripts, and its dependencies. Versions come from the workspace catalog. |
+| `package.json` | Package manifest. |
 | `partition-ddl.ts` | The second half of `pnpm db:generate`. Drizzle cannot write `PARTITION BY`, so this rewrites the generated migration to add it. |
 | `partitions.ts` | `pnpm db:partitions`: creates the current and next two months' partitions by hand, for when the worker's monthly job did not run. `--sweep` cleans up a deleted organization's cold storage. |
 | `platform-grant.ts` | `pnpm platform:grant <email>`: makes an existing user the first super admin by adding them to the platform organization with the `platform_admin` role. Later admins are invited from the app. |
@@ -38,7 +38,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 | `seed.ts` | `pnpm db:seed`: creates the starting data: the `loadbearing` organization (marked as the platform organization), its partitions, the system roles and the platform admin role. Safe to run again. |
 | `shard-env.ts` | Reads the database node URLs (`DATABASE_SHARD_<n>_URL`) for the command-line scripts. With none set there is one node. |
 | `tsconfig.json` | TypeScript settings, including the scripts that sit above `src/` so they are type-checked too. |
-| `tsup.config.ts` | Build settings: bundles `src/` into `dist/` as ES modules with type declarations. |
+| `tsup.config.ts` | Build settings. |
 | `vitest.config.ts` | Test runner settings. Loads the root `.env`, resolves sibling packages to their source, and leaves out the smoke tests. |
 | `vitest.smoke.config.ts` | Settings for `pnpm smoke`: runs the smoke tests serially against the live Docker stack, passing them its connection details. |
 
@@ -46,15 +46,15 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 
 | File | What it does |
 |---|---|
-| `import.ts` | Every import from outside this package, written once and re-exported, so the rest of `src/` imports from one place. |
-| `index.ts` | The package's public entry point. Re-exports what other packages may use, and contains no logic. |
+| `import.ts` | Outside-import surface. |
+| `index.ts` | Public entry point. |
 
 ### `packages/infrastructure/src/bullmq/`
 
 | File | What it does |
 |---|---|
 | `bullmq-queue.publisher.ts` | `BullMqQueuePublisher`: puts jobs on Redis queues with BullMQ. Retries with growing delays for about ten minutes, and keeps failed jobs for a week so they can be replayed. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 
 ### `packages/infrastructure/src/clickhouse/`
 
@@ -63,27 +63,27 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 | `clickhouse-analytics.projector.ts` | `ClickHouseAnalyticsProjector`: copies audit rows into ClickHouse and keeps its expiry rules in line with the settings. The only writer to ClickHouse. |
 | `clickhouse-analytics.reader.ts` | `ClickHouseAnalyticsReader`: reads daily action counts for one organization from ClickHouse. |
 | `clickhouse.connection.ts` | `ClickHouseConnection`: talks to ClickHouse over its HTTP interface with plain `fetch`, with timeouts and streamed results. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 
 ### `packages/infrastructure/src/loki/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `loki-log.reader.ts` | `LokiLogReader`: reads application logs back from Loki for the platform screens. |
 
 ### `packages/infrastructure/src/openai/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `openai-embedding.provider.ts` | `OpenAiEmbeddingProvider`: turns text into vectors with OpenAI's API, in batches, with timeouts, and refuses a reply with the wrong number of vectors. |
 
 ### `packages/infrastructure/src/pg/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 
 ### `packages/infrastructure/src/pg/primitive/`
 
@@ -92,14 +92,14 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 | `base.repository.ts` | `BaseRepository`: the base every Postgres repository extends. Each declares where its tables live (catalog, local or routed) and gets the right connection: the open transaction if there is one, or the right node's pool. Using a catalog repository inside a routed transaction throws. |
 | `database-cluster.ts` | `DatabaseCluster`: every database node the app talks to, each with a pooled connection, a direct one for schema changes, and an optional read-only copy. Picks the node for an organization. |
 | `database.ts` | `Database`: one Postgres connection pool wrapped for Drizzle, with a hook that counts statements (tests use it to assert query counts). |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `keyset-cursor.ts` | `KeysetCursor`: encodes and decodes the opaque "next page" cursor (time plus ID) used by big lists. A broken cursor is a validation error, never a silent first page. |
 
 ### `packages/infrastructure/src/pg/repository/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `pg-account.repository.ts` | Postgres version of the account repository: one person's memberships, suspension and platform denies across all organizations. |
 | `pg-activity-replay.reader.ts` | Reads the audit log back in order, one organization at a time, for copying into ClickHouse. |
 | `pg-activity.logger.ts` | `PgActivityLogger`: writes audit rows inside the open transaction. If the organization lives on another node, it sends the row there through the outbox instead. |
@@ -172,7 +172,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `platform-role.seed.ts` | `PlatformRoleSeed`: creates or updates the `platform_admin` role in the platform organization, holding every platform and organization permission. |
 | `system-role.seed.ts` | `SystemRoleSeed`: creates or updates the four built-in roles every organization gets (owner, admin, member, guest) and their permissions. |
 | `tenant-partition.seed.ts` | `TenantPartitionSeed`: creates (or drops) an organization's partitions in every partitioned table, with the current and next two months. |
@@ -181,7 +181,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `pg-unit-of-work.ts` | `PgUnitOfWork`: runs work in one Postgres transaction. Nested calls share it, the move freeze is enforced here, and an optional longer timeout is set inside it. |
 | `shard-scope.ts` | `ShardScope`: remembers, for the current request or job, which organization and node it runs against, so repositories pick the right pool. |
 | `transaction-scope.ts` | `TransactionScope`: remembers the open transaction (and its placement) for the current request, so every repository joins it. |
@@ -190,7 +190,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `realtime-log.ts` | `RealtimeLog`: keeps the last few live messages per channel in Redis, so a tab that reconnects is sent what it missed instead of refetching everything. |
 | `redis-cache.store.ts` | `RedisCacheStore`: the cache, in Redis. A corrupt entry counts as a miss, and every key has an expiry. |
 | `redis-rate-limit.store.ts` | `RedisRateLimitStore`: a counter per key that resets after a fixed window, in Redis. |
@@ -202,7 +202,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `ndjson-lines.ts` | `NdjsonLines`: reads a gzipped newline-delimited JSON file from storage line by line as it downloads, checking its checksum on the way. |
 | `ordinal-cursor.ts` | `OrdinalCursor`: the "next page" cursor for reading rows out of an archived file by line number. |
 | `s3-client.factory.ts` | `S3ClientFactory`: builds the S3 client with connection and inactivity timeouts, shared by both storage gateways. |
@@ -215,14 +215,14 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `smtp-email.sender.ts` | `SmtpEmailSender`: sends email over SMTP with a connection pool. Mailpit locally, a real provider in production. |
 
 ### `packages/infrastructure/src/unified/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `unified-markdown.renderer.ts` | `UnifiedMarkdownRenderer`: turns doc Markdown into safe HTML. Supports GitHub callouts, code highlighting, tabs, steps, accordions and cards, builds the table of contents and search sections, and strips anything unsafe. |
 
 ### `packages/infrastructure/tests/analytics/`
@@ -485,7 +485,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 | File | What it does |
 |---|---|
 | `index.md` | Every concrete adapter the system owns, behind a port and confined to one package — Postgres and its schema, Redis, S3, BullMQ and OpenAI. |
-| `meta.json` | Sidebar title, description and page order for this docs folder. |
+| `meta.json` | Sidebar order. |
 
 ### `packages/infrastructure/docs/reference/`
 
@@ -497,7 +497,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 | `enrollers.md` | The four Postgres adapters that put the first row in memberships — the advisory locks they take, the races those locks are protecting, and why every one of them binds structurally rather than by name. |
 | `fan-out.md` | The three patterns that fail before the database does, measured against the running stack — what one message to twenty-five thousand people actually costs, and which of the three is the one to worry about. |
 | `loki.md` | The read side of the diagnostic stream — one file, one HTTP API, and a port shaped so a label cannot be misused. |
-| `meta.json` | Sidebar title, description and page order for this docs folder. |
+| `meta.json` | Sidebar order. |
 | `notification-recipients.md` | Four ways to resolve an audience, the correlated EXISTS that keeps one of them a single statement, and the one read that is deliberately two. |
 | `partitions.md` | Tenant first and month underneath, the allowlist as the whole policy, and pruning measured rather than assumed — what a partitioned table costs and what it buys. |
 | `pgvector.md` | Why the vector store starts inside Postgres, what the permission filter has to run on, the score floor — and the ORDER BY that stops the HNSW index being used at all. |
