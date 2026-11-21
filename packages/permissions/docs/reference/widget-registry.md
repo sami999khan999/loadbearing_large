@@ -5,9 +5,8 @@ description: WidgetRegistry — the zones, the widgets registered to them, the s
 
 # `WidgetRegistry`
 
-A dashboard card can be missing because a flag is off, because the person's role lacks its
-permission, or because someone hid it. The registry holds every such unit in one table, and
-`visibilityOf` gives the one answer to "why is it gone".
+A card can be missing by flag, permission or someone's hide; the registry holds every such unit, and
+`visibilityOf` answers "why is it gone".
 
 ```ts
 WidgetRegistry.instance.visibilityOf("member.count", {
@@ -18,8 +17,7 @@ WidgetRegistry.instance.visibilityOf("member.count", {
 // "visible" | "hidden-by-flag" | "denied" | "hidden-by-admin" | "hidden-by-user" | "unregistered"
 ```
 
-It is pure data, with no React. That means a zone resolves during SSR, and a spec can say what a
-role sees without rendering anything.
+Pure data, no React — zones resolve during SSR, and specs say what a role sees without rendering.
 
 ## The declaration
 
@@ -34,23 +32,16 @@ export const memberWidgets = {
 } as const satisfies Record<string, WidgetMeta>;
 ```
 
-- **`permission` is required, `null` included.** An ungated widget says so, instead of forgetting.
-  It is never a prop, so the inspector knows what a widget needs without rendering it.
-- **`policy` defaults to `required`.** `dismissible` means a user may hide it and an org admin may
-  hide it for everyone.
-- **An inline widget has no `zone`, and its `policy` can only be `required`.** Preferences are loaded
-  by the route that owns a zone. An inline widget has no zone, so there is nothing to load them.
-  The type refuses the combination.
+- **`permission` is required, `null` included** — ungated is stated, and never a prop.
+- **`policy` defaults to `required`**; `dismissible` lets a user, or an admin for everyone, hide it.
+- **Inline widgets have no `zone` and must be `required`** — preferences load with a zone's route; the
+  type refuses the combination.
 
 ## The order, broadest cause first
 
-Unregistered, then the flag, then the permission, then the admin's preference, then the user's.
-The first that hides it is the answer. A user who hid a card their role no longer grants is told
-`denied`, because restoring it would change nothing. A required widget ignores both preferences, so
-a stale row can never hide the nav.
-
-Entitlement is not a step here. It has already narrowed `capabilities` on the server, so a widget
-behind an un-entitled key simply reads `denied`.
+Unregistered → flag → permission → admin preference → user preference; the first that hides answers (a
+hidden card the role no longer grants reads `denied`). Required widgets ignore preferences, so a stale row
+cannot hide the nav. Entitlement already narrowed `capabilities`, so it reads as `denied`.
 
 ## Zones
 
@@ -58,15 +49,12 @@ behind an un-entitled key simply reads `denied`.
 ZONES; // ["dashboard.main"]
 ```
 
-A zone key is `<page>.<region>`. There is one zone, so there is no zone folder and no zone metadata.
-A tuple is the whole declaration. `forZone` returns its widgets sorted by `order`, required and
-dismissible together. `ZoneWidgetKey<"dashboard.main">` is the union a zone's component map is
-typed against, so a map missing a widget, or naming another zone's, does not compile.
+`<page>.<region>`; one zone, so a tuple is the whole declaration. `forZone` sorts by `order`;
+`ZoneWidgetKey<"dashboard.main">` types a zone's component map, so a missing or foreign widget fails to
+compile.
 
 ## The nav is required, and the spec says why
 
-Hiding is not revoking. The API still answers, a bookmark still opens, and the nav still reaches the
-module. The nav is the last path to every capability, so it is `required` and never hideable. A spec
-asserts that every dismissible widget's permission belongs to a module some nav gate opens. The join
-is on the permission's module, not the gate's key, because the `document` gate asks for
-`ai.embedding.read`.
+Hiding is not revoking; the nav is the last path to every capability, so it is `required`. A spec asserts
+every dismissible widget's permission belongs to a module some nav gate opens — joined on the
+permission's module, since the `document` gate asks for `ai.embedding.read`.

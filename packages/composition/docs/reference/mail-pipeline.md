@@ -5,9 +5,8 @@ description: Why every message is a queue job, why auth mail goes through it too
 
 # The mail pipeline
 
-One path for every message in this system. A caller publishes a *mail request* — a template key,
-typed params, a recipient and a locale — and a job lands on `QueueName.MAIL`. The worker renders it
-to text and HTML and hands it to `EmailSender`.
+One path for every message: a caller publishes a *mail request* (template key, typed params, recipient,
+locale) onto `QueueName.MAIL`; the worker renders text and HTML and hands it to `EmailSender`.
 
 ```
 caller → MailPublisher → BullMQ (QueueName.MAIL) → MailConsumer → SendMailUseCase
@@ -16,85 +15,47 @@ caller → MailPublisher → BullMQ (QueueName.MAIL) → MailConsumer → SendMa
                                                                    └─ EmailSender    (transport)
 ```
 
-Before this, mail left the system from two unrelated places: Better Auth's hooks called a mailer
-synchronously inside the auth endpoint, and `InviteMemberUseCase` called a different one after its
-commit and swallowed the failure. Nothing recorded whether a message was sent and nothing retried.
+(Mail once left from two places — Better Auth's hooks inline, and `InviteMemberUseCase` swallowing
+failures — with no record and no retry.)
 
 ## Auth mail goes through the queue too, and that costs something
 
-The tempting exception is to send verification and reset mail inline, because somebody is waiting
-for it. It was rejected, and the trade is worth stating plainly rather than discovering:
+Sending verification and reset inline was rejected. **Cost: in development mail arrives only while the
+worker runs** (`pnpm dev` starts both; `.env.example` says so). **Gain:** one set of retries, backoff,
+duplicate suppression and rate limit — an inline send learns of an outage from users. Auth mail instead
+publishes at `high` (priority 1, ten attempts ≈ forty minutes from five seconds doubling; `normal`'s eight
+≈ ten), so a short outage delays rather than loses. Exhausted jobs stay failed a week for
+`pnpm queue:replay mail`.
 
-- **In development, mail only arrives while the worker is running.** A stopped worker is a sign-up
-  whose verification link is queued and never rendered. `pnpm dev` starts both, and `.env.example`
-  says so at the line.
-- In exchange, every message gets the same retries, the same exponential backoff, the same duplicate
-  suppression, and one rate limiter. An inline send has none of that, and the first provider outage
-  is the first time anyone finds out.
-
-The mitigation is priority, not an exception: auth mail publishes at `high`, which is BullMQ
-priority 1 with ten attempts, ahead of anything else on the queue. Doubling from five seconds, ten
-attempts wait about forty minutes and `normal`'s eight about ten, so a provider down for a few
-minutes delays mail rather than losing it. A message that runs out anyway stays in the failed set
-for a week, and `pnpm queue:replay mail` sends it again.
-
-**Mail that carries a credential is kept for an hour, not a week.** A verification, reset or
-email-change link, a 2FA code and an invitation link are each live in the job's `params`, and
-`invitations` stores only a token's digest. So those mailers set `credential: true`, and the job is
-removed as it completes (`RW.2`). A failed one is kept at least an hour, then goes with the next
-failure on the queue: BullMQ trims by age only when a job finishes, so nothing removes it on the
-hour itself. An hour is long enough to see the failure and replay it; past that, the person asks
-again and gets a fresh token anyway. While the job waits or retries, the link is in the queue
-instance, like any other payload.
-
-**Batches go as one enqueue.** `MailPublisher.publishMany` sends a digest page or a notification's
-recipients as one `addBulk` round trip, each job keeping the priority, attempts and dedupe key a
-single `publish` would have given it.
-
-**A `dedupeKey` holds for a day, not for as long as the job is kept.** It used to be the job id.
-BullMQ keeps at most a thousand completed jobs, so a digest over a bigger tenant that failed on a
-later page and retried re-sent the earlier pages, and those people got the morning's digest twice
-(`RV.5`). It is now `onceWithin`, which BullMQ holds as its own key with a TTL. A day covers every
-automatic re-send: the digest's key names its day, and an outbox delivery gives up after about three
-hours. The one path past it is `pnpm queue:replay` on a job failed more than a day ago, which an
-operator runs on purpose. The cost is one small key per keyed message for a day, on the queue
-instance.
+- **Credential mail is kept an hour, not a week** (`RW.2`): verification, reset and email-change links,
+  2FA codes and invitation links are live in `params`, so those mailers set `credential: true` — removed
+  on completion; a failure stays at least an hour (BullMQ trims by age only when a job finishes), long
+  enough to replay; after that a fresh request gets a fresh token.
+- **Batches are one enqueue** — `MailPublisher.publishMany` uses one `addBulk`, each job keeping its
+  priority, attempts and dedupe key.
+- **A `dedupeKey` holds a day** (`onceWithin`, a TTL key), not the job's lifetime — as a job id, BullMQ's
+  thousand-job cap let a retried digest re-send earlier pages (`RV.5`). A day covers every automatic
+  re-send (digest keys name their day; outbox gives up after ~three hours); only a deliberate
+  `queue:replay` of an older failure passes it.
 
 ## No delivery state, and that is a decision
 
-An earlier draft of this design wrote every outgoing message to a partitioned `mail_deliveries`
-table with `status` and `attempts` columns before queueing it. That was removed, for three reasons
-that compound:
+A pre-queue `mail_deliveries` table with `status` and `attempts` was removed:
 
-1. **BullMQ already supplies what those columns were re-implementing.** Retries, exponential backoff
-   and duplicate suppression are queue behaviour. A `status` column beside them is a second
-   state machine that can disagree with the first.
-2. **At scale, the mail provider is where a delivery record belongs.** A bounce, a complaint and a
-   suppression list are things only the provider can tell you. A local table records what this
-   process *attempted*, which is the less useful half of the question.
-3. **It would put the plaintext invitation token in Postgres.** `invitations` deliberately stores
-   only `token_hash`, so that a dump of that table holds nothing anyone can accept an invitation
-   with. A mail table carrying the rendered link would hand it straight back.
+1. **BullMQ already does it** — a `status` column is a second state machine that can disagree.
+2. **The provider owns delivery truth** — bounces, complaints, suppression; a local table records only
+   attempts.
+3. **It would put the plaintext invitation token in Postgres**, which `token_hash` exists to prevent.
 
-A dedicated mail log is something an application adds for a stated reason, and `26.10` added one
-when "was this sent?" stopped being answerable from the log lines below: tenant SMTP puts mail on
-hosts nobody here can read. It is **not** the table the three reasons rule out:
+`26.10` added a mail log once tenant SMTP made "was this sent?" unanswerable from logs — **not** the
+ruled-out table: `mail_delivery` is written by the consumer after the outcome and never read by the send
+path (a fact, not a status); it holds template, lower-cased recipient, outcome, attempts and message id,
+no params; a failed write is logged, never a rejected job (that would resend). Tenantless mail files
+under the platform organization. Partitioned, kept thirteen months, read on the platform **Mail** page
+per tenant.
 
-- **`mail_delivery` is written after the outcome, by the consumer, and never read by the send path.**
-  There is no `status` the queue's retries could disagree with: a row is a fact, sent or failed on
-  the last attempt.
-- **It holds no params.** Template, lower-cased recipient, outcome, attempts and the server's
-  message id. No rendered link, so no invitation token reaches Postgres.
-- **A row that cannot be written is a logged failure**, never a rejected job, which would send the
-  mail twice. Mail with no tenant is filed under the platform organization.
-
-It is partitioned like every growing table, kept thirteen months, and read on the platform **Mail**
-page one tenant at a time.
-
-**The outbox event table is the deliberate exception**, and the distinction is the whole point:
-Redis cannot commit atomically with Postgres, so an event published from Redis can fire for a change
-that rolled back, or vanish if the process dies in between. That is the one place the database write
-is load-bearing. A mail request is not — nothing reads it back.
+**The outbox is the deliberate exception:** Redis cannot commit with Postgres, so an event must be
+written in the transaction. A mail request is read back by nothing.
 
 ## The log lines beside it
 
@@ -106,17 +67,14 @@ Three log lines, which answer "was it sent" from Loki within its retention:
 | `mail.delivery.sent` | info | `MailConsumer` | template, the transport's message id |
 | `mail.delivery.failed` | error | `MailConsumer`, final attempt only | template, attempts |
 
-`email.send.failed` stays beside them as the transport's own reason, which `UnavailableError("smtp")`
-deliberately does not carry.
+`email.send.failed` carries the transport's reason, which `UnavailableError("smtp")` does not.
 
 **None of the three carries a recipient.** An address is the highest-cardinality field this system
 holds, and a log platform is not where it belongs — `event_code` is a Loki label and the catalog is
 its cardinality budget.
 
-`mail.delivery.sent` carries the message id because that is the thing a provider webhook would later
-correlate against. It is the whole reason `EmailSender.send` returns a receipt rather than `void`,
-and the reason `SendMailUseCase` returns it rather than swallowing it: `application` never logs, so
-the use-case hands the receipt up and the worker writes the line.
+The message id is what a provider webhook would correlate — why `EmailSender.send` returns a receipt and
+`SendMailUseCase` hands it up for the worker to log (`application` never logs).
 
 ## Which mail server a message goes out through (`26.11`)
 
@@ -127,33 +85,22 @@ the use-case hands the receipt up and the worker writes the line.
 | `auth.*` | the platform default | `SMTP_URL` | — |
 | any other, with a tenant | that tenant's server | the platform default | `SMTP_URL` |
 
-**Sign-in mail never uses a tenant's server.** A tenant who misconfigures their mail host must not
-be able to lock anyone out of signing in. The platform default is the platform organization's own
-row, set on the platform **Mail** page like any tenant's.
+**Sign-in mail never uses a tenant's server** — a misconfigured host must not lock anyone out. The
+platform default is the platform organization's row, set on the platform **Mail** page.
 
-- **Passwords are encrypted** with AES-256-GCM under `MAIL_SECRET_KEY` (`AesGcmSecretCipher` behind
-  the `SecretCipher` port). The key is never derived from `AUTH_SECRET`, so rotating the cookie
-  secret breaks no tenant's mail. Without the key, no password can be saved.
-- **Passwords are write-only.** A read returns `hasPassword` and nothing else, and the audit row
-  holds the host and sender only.
-- **One pool per server.** `SmtpEmailSenderResolver` keeps a pooled sender per configured row,
-  rebuilt only when the row's `updated_at` changes and re-read at most once a minute. A save
-  reaches every worker within that minute.
-- **A password that will not decrypt** (a rotated key) is logged as `mail.settings.unusable`, and
-  that tenant's mail falls back to the next sender rather than failing.
+- **Passwords are encrypted** (AES-256-GCM, `MAIL_SECRET_KEY`, `AesGcmSecretCipher` behind `SecretCipher`),
+  never derived from `AUTH_SECRET`; without the key none can be saved. **Write-only** — reads return
+  `hasPassword`; audit holds host and sender.
+- **One pool per server** (`SmtpEmailSenderResolver`), rebuilt on `updated_at`, re-read at most once a
+  minute.
+- **An undecryptable password** logs `mail.settings.unusable` and falls back to the next sender.
 
 ## Why the invitation send still sits after the commit
 
-`InviteMemberUseCase` publishes its mail after `unitOfWork.run` and still wraps it in a
-`try`/`catch`. Both look like the thing this pipeline was supposed to fix, and neither is.
-
-After the commit, because a message about a row that rolled back is a link to nothing. And caught,
-because the plaintext token cannot ride a durable row — which is what `token_hash` exists to prevent
-— so this enqueue is the one step that genuinely cannot be made atomic with the invitation.
-
-The window that leaves is a crash between commit and enqueue: a live invitation whose mail was never
-queued. The answer is a resend action rather than a table, filed as `C6.9`. The operator action
-today is to invite again, which replaces the row and issues a new token.
+`InviteMemberUseCase` publishes after `unitOfWork.run`, in a `try`/`catch`: after, since a rolled-back
+row's mail links nowhere; caught, since the plaintext token cannot ride a durable row, making this the
+one non-atomic step. A crash between leaves an unmailed invitation — answered by a resend action (`C6.9`);
+today, invite again.
 
 ## Where each piece lives
 
@@ -166,28 +113,17 @@ today is to invite again, which replaces the row and issues a new token.
 | `QueuedMailPublisher`, the two mailers | `composition/src/mail/` | adapters, named only in the DI root |
 | `MailConsumer` | `apps/worker/src/consumer/` | thin, like an oRPC router |
 
-The recipient's locale rides the request rather than being resolved at render time, which is why
-`AuthMailer` takes a `MailRecipient` rather than an address: Better Auth calls its hooks from a
-token endpoint carrying no request, so there is nowhere else the person's own language could come
-from. It is `users.locale`, an additional field, and `AuthFactory` normalises it rather than
-trusting it.
+The locale rides the request — `AuthMailer` takes a `MailRecipient`, since Better Auth's hooks run from
+request-less token endpoints. It is `users.locale`, normalised by `AuthFactory`.
 
 ## Templates are hand-written HTML, and there is no template package
 
-A template here is a string, so the one thing a separate package would have bought — a home for
-React in a graph whose copy and domain packages are React-free — is not needed. `MailLayout` builds
-a table-based document with every style inline, because that is what a mail client renders, and it
-is the one place in the repository allowed to write a literal colour: `var(--primary)` reaching an
-inbox renders as nothing at all. The exemption is recorded in
-[`docs/ai/rules/color.md`](../../../../docs/ai/rules/color.md).
-
-The plain-text part is composed from the same content rather than derived from the HTML. Stripping
-tags is how an `&amp;` ends up in a text body and a URL with a query string stops working.
+Templates are strings, so no React template package. `MailLayout` builds a table with inline styles —
+the one place allowed literal colours, since `var(--primary)` renders nothing in an inbox
+([color](../../../../docs/ai/rules/color.md)). Plain text is composed from the same content, not stripped
+from HTML (which leaks `&amp;` and breaks query strings).
 
 ## The swap this is shaped for
 
-Moving from SMTP to a provider API — SES, Postmark, Resend — is one adapter behind the existing
-`EmailSender` port, which is exactly the swap that port exists for. That is what buys bounce and
-complaint webhooks, suppression lists and a searchable sent log: the delivery record this design
-deliberately does not keep. It is filed as `C6.11`, and it moves the dependency entry from Tier 0
-(a protocol) to Tier 2 (an SDK behind a port).
+SMTP → SES, Postmark or Resend is one `EmailSender` adapter, buying bounce and complaint webhooks,
+suppression and a searchable sent log (`C6.11`) — Tier 0 (protocol) to Tier 2 (SDK behind a port).

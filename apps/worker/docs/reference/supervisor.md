@@ -5,21 +5,19 @@ description: Lanes, WORKER_QUEUES, the ceilings checked at boot, and the reconci
 
 # The supervisor
 
-**A worker process runs lanes, and `WORKER_QUEUES` picks which.** A lane is one queue served
-inside one process: one BullMQ `Worker` with its own concurrency. Before this, every process ran
-every consumer. Adding a copy to speed up embedding also added a copy of mail, outbox and the rest,
-and each copy opened database connections.
+**A process runs lanes; `WORKER_QUEUES` picks which.** A lane is one queue in one process — a BullMQ
+`Worker` with its own concurrency — so scaling embedding no longer copies mail, outbox and their
+connections.
 
 | Piece | File | Job |
 |---|---|---|
 | `LaneRegistry` | `src/supervisor/lane-registry.ts` | Every queue this build can serve, in start order, with its starting concurrency and the variable that sets it |
-| `QueueLimits` | `src/supervisor/queue-limits.ts` | The most one process may run of each queue, whatever the environment says |
+| `QueueLimits` | `packages/application/src/primitive/queue-limits.ts` | The most one process may run of each queue, whatever the environment says |
 | `WorkerSupervisor` | `src/supervisor/worker-supervisor.ts` | Checks the ceilings, starts the selected lanes, and closes them on drain |
 
 ## `WORKER_QUEUES`
 
-A comma list of queue names. Unset or empty serves every queue, which is the behaviour before the
-variable existed.
+A comma list of queues; unset or empty serves all.
 
 ```bash
 # One service for the light queues, one for embedding with three replicas.
@@ -27,19 +25,13 @@ WORKER_QUEUES=mail,event,notification,maintenance
 WORKER_QUEUES=embedding
 ```
 
-Copies of one service split a queue's jobs between them: BullMQ hands each job to one taker, and
-the repeatable schedules already dedupe by job id.
+Copies split a queue's jobs (one taker per job; schedules dedupe by id). **A wrong name fails boot** — a
+typo is an undrained queue that looks quiet. `analytics` is refused without `CLICKHOUSE_URL` for the same
+reason: the default list skips the lane, and naming it fails.
 
-**A wrong name is a boot error, not a warning.** A typo here is a queue nobody drains, and it
-looks exactly like a quiet queue. `analytics` is refused without `CLICKHOUSE_URL` for the same
-reason: the lane does not exist, so the default list skips it and naming it explicitly fails.
-
-**Leaving `mail` out is allowed, and it is your job to serve it elsewhere.** Every sign-up's
-verification link is a mail job. The same goes for `event`: without it the outbox is never drained.
-
-Every process still registers the schedules and runs the partition check at boot, whatever lanes it
-serves. Registration is idempotent, and a schedule only puts jobs on a queue — the lane that
-serves the queue runs them.
+**Omitting `mail` or `event` is allowed — serve them elsewhere** (every sign-up mails; `event` drains the
+outbox). Every process still registers schedules and runs the boot partition check (idempotent; lanes run
+the jobs).
 
 ## Two ceilings, checked before the first lane starts
 
@@ -48,19 +40,13 @@ serves the queue runs them.
 2. **Per process:** the sum across the selected lanes may not exceed
    `WORKER_PROCESS_MAX_CONCURRENCY` (64). The error names each lane's variable and value.
 
-Both are refusals, and both happen before any lane starts. A refusal halfway would leave a process
-consuming some queues and then exiting.
-
-The older `worker.pool.oversubscribed` warning still runs after boot. It compares the lanes that
-started, mail excluded, against `DATABASE_POOL_MAX` — see [`env.md`](./env.md). The ceiling is a
-hard stop on a process that is clearly misconfigured; the warning is about the pool you actually
-have.
+Both refuse before any lane starts (halfway would consume some queues, then exit). After boot,
+`worker.pool.oversubscribed` warns about the real pool ([env](./env.md)).
 
 ## At runtime: the Workers page reaches a running process
 
-The platform **Workers** page (`/platform/workers`, `platform.worker.read` to see it,
-`platform.worker.manage` to change anything) changes what a running process does. It never starts
-or stops a process; that is the host's job.
+The platform **Workers** page (`/platform/workers`; `platform.worker.read` / `.manage`) changes what a
+running process does — never starting or stopping one (the host's job).
 
 | Change | Where it is held | Who obeys it |
 |---|---|---|
@@ -69,9 +55,8 @@ or stops a process; that is the host's job.
 | Change a process's queues | Its overrides; replaces `WORKER_QUEUES` | That process, until it restarts or is reset |
 | Autoscale a queue | `worker_queue_settings` | Every process serving the queue |
 
-**Within a second, or five at worst.** A change publishes on `worker:control` and the named process
-reconciles at once. Every process also reconciles every 5 s, so one that missed the message catches
-up on its own.
+**Within a second, five at worst:** a change publishes on `worker:control`; every process also reconciles
+every 5 s.
 
 ### One reconcile pass
 
@@ -81,7 +66,7 @@ up on its own.
 4. Autoscale each lane from its queue's waiting count (`WorkerAutoscaleRules`).
 5. Write the heartbeat, which is what the page lists.
 
-Passes never overlap. A signal that arrives during a pass queues exactly one more.
+Passes never overlap; a mid-pass signal queues one more.
 
 ### Autoscaling is concurrency, not processes
 
@@ -94,13 +79,11 @@ between the saved minimum and maximum:
   after the process's other lanes.
 - **Not at all** while the queue or lane is paused: a paused backlog is not demand.
 
-The settings are per process. A maximum of 8 with three processes serving the queue is up to 24
-jobs at once.
+Per process: a maximum of 8 on three processes is 24 at once.
 
 ### Where the state lives
 
-Everything per process is on the **queue** Redis, never the cache. The cache evicts, and an evicted
-override is a paused process that silently resumes.
+All on the **queue** Redis — an evicted override is a paused process silently resuming.
 
 | Key | What |
 |---|---|
@@ -109,10 +92,6 @@ override is a paused process that silently resumes.
 | `worker:proc:{id}:overrides` | The dashboard's per-process settings, with a 60 s TTL the heartbeat refreshes |
 | `worker:control` | Pub/sub channel; the message is `all` or one process id |
 
-A process id is `host-pid-random`, new on every boot, so a restarted process never inherits the
-overrides set on the one before it. A process killed without a drain drops off the page once its
-heartbeat expires; a clean shutdown removes it at once.
-
-**A queue paused in the database is re-applied at boot.** BullMQ keeps its pause in Redis, so after
-a queue Redis migration the first worker to boot that serves a paused queue copies the pause back
-onto it.
+Ids are `host-pid-random`, new per boot, so restarts inherit no overrides; a killed process drops off
+when its heartbeat expires, a clean one at once. **Database pauses are re-applied at boot**, so a queue
+Redis migration does not unpause.
