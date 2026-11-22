@@ -5,8 +5,7 @@ description: Two instances with opposite durability guarantees, every flag expla
 
 # `redis-cache` and `redis-queue`
 
-The same image twice, configured as opposites. This is the most-questioned pair in the stack and the
-one worth understanding before changing anything.
+The same image twice, configured as opposites — the most-questioned pair in the stack.
 
 | | `redis-cache` | `redis-queue` |
 | --- | --- | --- |
@@ -18,31 +17,19 @@ one worth understanding before changing anything.
 | **Holds** | capability cache, session cache | BullMQ jobs |
 | **If flushed** | a slow minute | **lost work** |
 
-**Both listen on 6379 inside the network.** They are separate containers, so there is no collision —
-only the host mapping differs. `redis-queue:6380` from inside the network is wrong and will refuse.
+**Both listen on 6379 inside** — separate containers, only host mappings differ; `redis-queue:6380`
+inside the network refuses.
 
 ---
 
 ## Why two
 
-Redis does three jobs here and they are not equally disposable.
-
-**Cache and session storage are cache-aside.** `CapabilityCache` reads through to
-`PgCapabilityRepository` on a miss; Better Auth's secondary storage reads through to the Postgres
-`session` table. Losing either costs latency, not data.
-
-**A BullMQ job is derived from nothing.** It is work somebody asked for that has not happened yet.
-There is no table to rebuild it from, which is why the [derived-store
-test](../../opinions/data-and-scale.md) puts it in a different category from everything else
-on this page.
-
-One instance forces one eviction policy onto both:
-
-- `allkeys-lru` — memory pressure silently deletes queued jobs. Work vanishes with no error.
-- `noeviction` — the queue is safe, and a full cache starts returning errors on a path that should
-  degrade gracefully.
-
-**The absence of a correct single answer is the tell that it was two concerns wearing one container.**
+**Cache and sessions are cache-aside:** `CapabilityCache` reads through to `PgCapabilityRepository`,
+Better Auth's secondary storage to the Postgres `session` table — losing either costs latency.
+**A BullMQ job is derived from nothing:** requested work with no table to rebuild it from (the
+[derived-store test](../../opinions/data-and-scale.md)). One instance forces one policy on both:
+`allkeys-lru` silently deletes queued jobs under memory pressure; `noeviction` makes a full cache error
+on a path that should degrade. **No correct single answer means two concerns in one container.**
 
 ---
 
@@ -53,44 +40,34 @@ redis-cache:
   command: ["redis-server", "--save", "", "--maxmemory-policy", "allkeys-lru"]
 ```
 
-**`--save ""`** disables RDB snapshotting entirely. An empty string is how Redis expresses "no save
-points" on the command line; omitting the flag leaves the image's defaults, which do periodic
-snapshots to disk. Snapshotting a cache is I/O spent on data that is worthless the moment it is
-stale.
-
-**`--maxmemory-policy allkeys-lru`** evicts the least-recently-used key of *any* kind when memory is
-tight. The `allkeys` prefix matters: `volatile-lru` only considers keys with a TTL, and a key written
-without one would then be immortal and the instance would fill anyway.
+- **`--save ""`** disables RDB snapshots (omitting the flag keeps the image's periodic defaults) — no
+  I/O on data worthless once stale.
+- **`--maxmemory-policy allkeys-lru`** evicts the least-recently-used key of *any* kind; `volatile-lru`
+  only considers TTL'd keys, so one written without a TTL would be immortal and the instance would fill.
 
 ```yaml
 redis-queue:
   command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
 ```
 
-**`--appendonly yes`** turns on the append-only file — every write is journaled, so a crash loses at
-most the last fsync window rather than everything since the last snapshot. This is the flag that
-makes the volume meaningful.
+- **`--appendonly yes`** journals every write, so a crash loses at most the last fsync window — what
+  makes the volume meaningful.
+- **`--maxmemory-policy noeviction`** errors when memory is full instead of deleting. A failed
+  `enqueue` is a failed request; a silently evicted job is a customer asking why nothing happened.
 
-**`--maxmemory-policy noeviction`** makes Redis return an error when memory is exhausted instead of
-deleting something. Loud and recoverable beats silent and lossy: a failed `enqueue` surfaces as a
-failed request, where a silently evicted job surfaces as a customer asking why nothing happened.
+**So both job sets are capped:** completed jobs kept an hour, max 1,000 per queue; failed jobs a week,
+max 10,000. The failed set is the dead letter (`pnpm queue:replay <queue>` re-queues it), and the cap
+stops a day-long failure storm filling a `noeviction` instance that would then refuse every enqueue.
+Likewise an embedding job carries its text's bucket key, never the text (up to 100 KB).
 
-**That is why both job sets are capped.** A completed job is kept an hour and at most a thousand
-per queue; a failed one a week and at most ten thousand. The failed set is the dead letter —
-`pnpm queue:replay <queue>` puts its jobs back — and the cap is what stops a day-long failure storm
-filling a `noeviction` instance, which would then refuse every enqueue. For the same reason an
-embedding job carries the key of its text in the bucket, never the text (up to 100 KB a job).
-
-> **AOF covers a crash. It does not cover `FLUSHALL`.** That is why the queue also wants a nightly
-> sweep that re-enqueues unprocessed work, reconciling against Postgres rather than against BullMQ's
-> own job records — which age out after an hour ([15](../../setup/15-infrastructure-package.md)).
+> **AOF covers a crash, not `FLUSHALL`.** Hence a nightly sweep re-enqueueing unprocessed work,
+> reconciled against Postgres rather than BullMQ job records, which age out in an hour.
 
 ---
 
 ## How the application picks one
 
-`RedisConnection` takes both URLs and hands out the right client per job
-([15](../../setup/15-infrastructure-package.md)):
+`RedisConnection` takes the URLs and hands out the right client per job:
 
 ```ts
 redis.client()           // cacheUrl    — prefixed, for RedisCacheStore
@@ -99,35 +76,24 @@ redis.realtimeClient()   // realtimeUrl — live frames; the cache client itself
 redis.subscriberClient() // realtimeUrl — subscriber mode, opened by the first stream
 ```
 
-**One class taking two URLs rather than two classes**, because which connection a consumer gets
-should be a property of what it is doing rather than a wiring decision. Passing two bare `Redis`
-instances into `Container` puts that choice at a call site where both arguments have the same type
-and swapping them compiles.
+**One class, several URLs**, so the connection follows what a consumer does — two bare `Redis`
+arguments to `Container` have the same type, and swapping them compiles.
 
-Two settings are not tuning:
+- **`maxRetriesPerRequest: null` on the queue client** — BullMQ's blocking commands stay open, and
+  ioredis's default retry limit kills them: workers stop consuming after minutes, with no error.
+- **A key prefix on the cache client, none on the queue client** — ioredis prepends it transparently,
+  right for cache keys and breaking for BullMQ, which manages its own key structure.
 
-**`maxRetriesPerRequest: null` on the queue client.** BullMQ's blocking commands sit open
-indefinitely and ioredis's default retry limit kills them. The symptom is workers that stop consuming
-after a few minutes with no error.
+> **Everything through `CacheStore` is on the evicting instance**, Better Auth's secondary storage
+> included — which is why sessions stay in Postgres. An evicted session is a miss, never a sign-out.
 
-**A key prefix on the cache client and none on the queue client.** ioredis prepends the prefix
-transparently, which is what you want for cache keys and what breaks BullMQ, whose key structure it
-manages itself.
+### A third instance for live frames
 
-> **Anything reached through `CacheStore` is on the instance that evicts** — including Better Auth's
-> secondary storage. That is exactly why sessions stay in Postgres and Redis is only a read-through
-> in front of them. An evicted session must be a cache miss, never a sign-out.
-
-### A third instance for live frames, when fan-out gets heavy
-
-`REDIS_REALTIME_URL` is optional. Unset, or equal to `REDIS_CACHE_URL`, live frames ride the cache
-instance and `realtimeClient()` **is** the cache client — no extra socket. Set it apart once a large
-room's fan-out competes with every request's session and permission reads: one message to a 25 000
-member room is 25 000 publishes, on the instance a sign-in is waiting on.
-
-Pub/sub keeps nothing, so that instance needs no persistence and no eviction policy. What it does
-need is attention to `client-output-buffer-limit pubsub`: a subscriber that falls behind is
-**disconnected** at the limit, and every stream on that process then ends and resyncs at once.
+`REDIS_REALTIME_URL` is optional; unset or equal to `REDIS_CACHE_URL`, `realtimeClient()` **is** the
+cache client. Set it apart once large-room fan-out competes with sign-in reads — one message to a
+25,000-member room is 25,000 publishes. Pub/sub keeps nothing (no persistence or eviction policy
+needed), but watch `client-output-buffer-limit pubsub`: a lagging subscriber is **disconnected** at the
+limit, ending and resyncing every stream on that process at once.
 
 ---
 
@@ -146,5 +112,5 @@ $C exec redis-cache redis-cli config get save               # (empty)
 docker compose -f infra/docker-compose.yml exec redis-cache redis-cli flushall
 ```
 
-The same command against `redis-queue` deletes work. The split is what makes it possible to clear one
-without the other, and the habit is worth forming locally where the cost is zero.
+The same against `redis-queue` deletes work. The split lets you clear one without the other; form the
+habit locally, where it costs nothing.

@@ -5,21 +5,14 @@ description: The local stack — every file, every service, and how they reach e
 
 # `infra/`
 
-> The files documented here live in [`infra/`](../../infra/docs/index.md) at the repository root —
-> `docker-compose.yml`, the two init scripts, and the Loki/Alloy configs. The documentation sits
-> under `docs/` with every other tree; the configuration stays next to the compose file that
-> mounts it.
+> The files live in [`infra/`](../../infra/docs/index.md) at the repository root —
+> `docker-compose.yml`, the init scripts and the Loki/Alloy configs — next to the compose file that
+> mounts them. The documentation sits here with the other trees.
 
-Everything the application talks to, as containers. Nothing here is imported by any package — these
-are [Tier 0](../opinions/dependencies.md) dependencies, provided by the deployment and
-reached over a protocol the code was going to speak anyway.
-
-[11 · Local Infrastructure](../setup/11-local-infrastructure.md) is the build order and
-explains *why* each choice was made. **This is the reference:** what each file does, how each service
-works, and how they connect.
-
-**Running it somewhere other than a laptop is [deployment](deployment.md)** — the same nine services
-on a VPS, and the order to move them to managed services in when one box stops fitting.
+Everything the application talks to, as containers. No package imports any of it: these are
+[Tier 0](../opinions/dependencies.md) dependencies, reached over a protocol the code speaks anyway.
+**This is the reference** — what each file does, how each service works, how they connect. Running it
+beyond a laptop is [deployment](deployment.md).
 
 ---
 
@@ -35,27 +28,19 @@ on a VPS, and the order to move them to managed services in when one box stops f
 | `logs/` | Alloy, tailed continuously | [alloy](reference/alloy.md) |
 | `.env` | `docker compose` | [compose](reference/compose.md#host-ports) |
 
-Redis and Mailpit have no config file — every setting is a command-line flag or a default. See
-[redis](reference/redis.md) and [mailpit](reference/mailpit.md).
+Redis and Mailpit have no config file — flags and defaults only ([redis](reference/redis.md),
+[mailpit](reference/mailpit.md)).
 
-**The config files are flat on purpose.** Each is mounted as a single file, so a directory per
-service would be a path holding one thing. `docs/` is nested because there is genuinely a page's worth
-to say about each — which is what earns structure ([Simplicity](../opinions/simplicity.md)).
-
-This is the opposite answer from the one `packages/infrastructure/src/` gives, and the difference is
-what each directory holds. There, ClickHouse and Loki each got a folder, because each is several
-TypeScript modules and the folder is the unit of "what does this package depend on". Here, each is
-one mounted file — and a `clickhouse/` folder holding that one file would state nothing
-the ClickHouse schema does not. **Structure is earned by contents, not by symmetry with another
-directory.**
+**Configs are flat on purpose:** each is one mounted file, so a folder per service would hold one
+thing. `packages/infrastructure/src/` gives the opposite answer because there each vendor is several
+modules. **Structure is earned by contents, not symmetry** ([Simplicity](../opinions/simplicity.md)).
 
 ---
 
 ## How the services connect
 
-Compose creates one bridge network, `ratchet_default`, and joins every container to it. Inside that
-network **a container reaches another by its service name** — Docker's embedded DNS resolves `loki`,
-`minio`, `postgres` and so on to the container's address.
+One bridge network, `ratchet_default`; **containers reach each other by service name** via Docker's
+embedded DNS.
 
 ```
                     ┌──────────────────────────── host ────────────────────────────┐
@@ -83,33 +68,20 @@ network **a container reaches another by its service name** — Docker's embedde
                           └───────┘──── tails /var/log/app/*.log  (= infra/logs/)
 ```
 
-**Four things to take from that picture.**
-
-**Nothing connects to the applications.** Traffic runs the other way: the apps dial Postgres, Redis
-and MinIO from the host, and Alloy *reads* their output rather than being told anything. That is what
-makes the log platform swappable — see [alloy](reference/alloy.md).
-
-**MinIO has two unrelated consumers.** The application stores uploads in the `ratchet` bucket; Loki
-stores its chunks and index in the `loki` bucket. They share a server and nothing else
-([minio](reference/minio.md)).
-
-**No container in this stack reads the logs back, and none will.** Loki is storage plus a
-`query_range` HTTP API; the reader is application code —
-[`LokiLogReader`](../../packages/infrastructure/docs/reference/loki.md), built when `LOKI_URL` is
-set — because the surface that matters is the super-admin dashboard, which already knows what an
-organization is. Grafana used to fill this slot and was removed deliberately: two consoles for one
-operator, and the query that mattered was the one it could not express
-([compose](reference/compose.md#why-there-is-no-log-ui)).
-
-`docker compose logs` and curl against the API stay the break-glass path regardless
-([loki](reference/loki.md)) — a log query that needs the application running is no use during the
-incident where the application is down.
-
-**Only Alloy touches the Docker socket**, read-only, and only to read container stdout.
+- **Nothing connects to the applications.** The apps dial Postgres, Redis and MinIO from the host;
+  Alloy *reads* their output. That keeps the log platform swappable ([alloy](reference/alloy.md)).
+- **MinIO has two unrelated consumers:** uploads in the `ratchet` bucket, Loki chunks and index in
+  `loki` ([minio](reference/minio.md)).
+- **No container reads logs back, and none will.** The reader is
+  [`LokiLogReader`](../../packages/infrastructure/docs/reference/loki.md) (built when `LOKI_URL` is
+  set) feeding the super-admin dashboard, which knows what an organization is; Grafana was removed for
+  that reason ([compose](reference/compose.md#why-there-is-no-log-ui)). `docker compose logs` and curl
+  stay the break-glass path ([loki](reference/loki.md)).
+- **Only Alloy touches the Docker socket**, read-only, for container stdout.
 
 ### Ports: inside versus outside
 
-Two numbers per service, and confusing them is the usual source of "connection refused".
+Confusing the two is the usual "connection refused".
 
 | Service | Inside the network | From the host |
 |---|---|---|
@@ -123,28 +95,22 @@ Two numbers per service, and confusing them is the usual source of "connection r
 | alloy | `alloy:12345` | `localhost:12345` |
 | clickhouse | `clickhouse:8123` | `localhost:18123`, native `:9002` |
 
-**Both Redis instances listen on 6379 inside.** They are different containers, so there is no
-collision; only the host mapping differs. `redis-queue:6380` from inside the network is wrong and
-will refuse.
-
-ClickHouse's native port maps to 9002 because MinIO owns 9000.
+**Both Redis instances listen on 6379 inside** — only host mappings differ; `redis-queue:6380` inside
+the network refuses. ClickHouse's native port maps to 9002 because MinIO owns 9000.
 
 ---
 
 ## Startup order
 
-Only two dependencies are declared, and both are real:
+Two declared dependencies, both real:
 
 ```
 minio ──healthy──→ minio-init ──completed──→ loki ──healthy──→ alloy
 ```
 
-Loki cannot start until its bucket exists; Alloy has nowhere to push until Loki accepts writes.
-Everything else starts in parallel — Postgres, Redis and MinIO have no dependencies on each other.
-
-**`minio-init` is a one-shot container.** It creates both buckets and exits, so `exited (0)` in
-`docker compose ps` is success. Without it the first upload fails with `NoSuchBucket` and everyone
-goes looking for a code bug.
+Loki needs its bucket; Alloy needs Loki accepting writes. The rest start in parallel. **`minio-init`
+is a one-shot** — `exited (0)` is success; without it the first upload fails with `NoSuchBucket` and
+looks like a code bug.
 
 ---
 
@@ -160,9 +126,8 @@ goes looking for a code bug.
 | Diagnostic log lines | `JsonLogger` → stdout | Alloy → Loki → MinIO `loki` | no — 30 days, lossy |
 | Analytics aggregates | worker, replaying `activity_log` | ClickHouse *(stopped by default)* | no — replayable |
 
-The rule behind that column is [Data and scale](../opinions/data-and-scale.md): **Postgres
-owns anything a transaction depends on or a user reads immediately after writing; everything else is
-a derived store behind a port.**
+The rule ([Data and scale](../opinions/data-and-scale.md)): **Postgres owns anything a transaction
+depends on or a user reads right after writing; everything else is a derived store behind a port.**
 
 ---
 
@@ -183,19 +148,15 @@ pnpm infra:logs            # tail every service
 | `observability` | `loki`, `alloy` | **on** — the diagnostic stream is live today |
 | `analytics` | `clickhouse` | **off** — see [clickhouse](reference/clickhouse.md) |
 
-**Starting the container and feeding it are two separate switches.** `pnpm infra:up:analytics` runs
-ClickHouse; `CLICKHOUSE_URL` in `.env` is what makes the application build a projector and the worker
-register the projection and reconciliation schedules. Both are off by default, and the adapters are
-written either way — a folder in `packages/infrastructure/src/` means the seam is implemented, not
-that the store is running.
+**Starting ClickHouse and feeding it are separate switches:** `pnpm infra:up:analytics` runs the
+container; `CLICKHOUSE_URL` makes the app build a projector and the worker register projection and
+reconciliation schedules. Both default off; the adapters exist either way.
 
-> `down`, `reset` and `logs` pass `--profile "*"`. Compose only acts on profiles it was given, so
-> without it a reset leaves ClickHouse running and `logs` omits it from the output you are reading to
-> debug it.
+> `down`, `reset` and `logs` pass `--profile "*"` — otherwise a reset leaves ClickHouse running and
+> `logs` omits it.
 
-**Credentials are `ratchet` / `ratchet` everywhere except MinIO**, which is `ratchet` /
-`ratchetsecret`. They are hard-coded on purpose: this stack holds nothing worth protecting, and a
-scratch database behind a secret is a scratch database nobody can debug.
+**Credentials are `ratchet` / `ratchet`, MinIO `ratchet` / `ratchetsecret`**, hard-coded on purpose:
+a scratch database behind a secret is one nobody can debug.
 
 ---
 
@@ -212,8 +173,6 @@ Seven `healthy`, `minio-init` `exited (0)`, no `clickhouse`.
 curl -s -G http://localhost:13100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
 ```
 
-Per-service checks are on each reference page. The most common failures across all of them:
-
 | Symptom | Usually |
 |---|---|
 | `connection refused` from inside a container | Used the host port instead of the container port |
@@ -222,3 +181,5 @@ Per-service checks are on each reference page. The most common failures across a
 | A fifth label appears | Loki or a source component invented it — [alloy](reference/alloy.md) |
 | ClickHouse table "missing" | It is in `default`, not `ratchet` — [clickhouse](reference/clickhouse.md) |
 | Port already allocated | Something else owns it — [compose](reference/compose.md#host-ports) |
+
+Per-service checks are on each reference page.

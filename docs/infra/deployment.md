@@ -5,21 +5,17 @@ description: One VPS now, managed services later — what changes, what never ch
 
 # Deployment
 
-The same nine services, on a machine you rent. Then, service by service, on machines somebody else
-operates.
+The same nine services on a rented machine, then, service by service, on machines somebody else
+operates. **The application code never changes between stages:** every store is behind a port
+([Dependencies](../opinions/dependencies.md)), every credential is an `.env` value, and no package
+reads `process.env` — so each move is a config change, not a migration.
 
-**The application code does not change between any of the stages on this page.** Every store is
-behind a port ([Dependencies](../opinions/dependencies.md)), every credential is a value in
-`.env`, and no package reads `process.env` at all. That is what makes each move below a config change
-rather than a migration — and it is the whole return on the architecture.
-
-> **Nothing on this page has been executed.** The local stack in [index](index.md) is verified
-> against a running system; this is design, and the first real deployment will find things it got
-> wrong. Treat the commands as a starting point rather than a transcript.
+> **Nothing on this page has been executed.** The local stack in [index](index.md) is verified; this
+> is design, and the first real deployment will find what it got wrong.
 
 ---
 
-## Before anything else: the ports are wide open
+## First: the ports are wide open
 
 The compose file publishes every service on **all interfaces**:
 
@@ -31,22 +27,16 @@ minio         0.0.0.0:9000->9000/tcp
 loki          0.0.0.0:3100->3100/tcp     ← no auth, accepts writes
 ```
 
-On a laptop behind NAT that is convenient and harmless. **On a VPS with a public IP it is a database,
-two unauthenticated caches, an object store and an unauthenticated log API on the open internet.** Scanners find
-port 5432 in minutes.
+Harmless behind NAT; **on a public VPS it is a database, two unauthenticated caches, an object store
+and an open log API on the internet**, found by scanners in minutes.
 
 > [!CAUTION]
-> **A firewall does not fix this by itself.** Docker writes its own iptables rules into the
-> `DOCKER-USER` chain, which is evaluated *before* UFW's chains. `ufw deny 5432` looks like it
-> worked, reports as active, and the port stays reachable. This surprises people who have done
-> everything right.
+> **A firewall does not fix this.** Docker writes iptables rules into `DOCKER-USER`, evaluated
+> *before* UFW's chains — `ufw deny 5432` reports active and the port stays reachable.
 
-**The fix is to stop publishing, not to filter.** Services that only other containers use need no
-`ports:` entry at all — they are already reachable on the bridge network by service name. The
-production overlay below removes every publish except the reverse proxy's.
-
-Where you genuinely need host access — `psql` from your laptop — bind to loopback and reach it
-through an SSH tunnel:
+**Stop publishing instead of filtering.** Container-only services need no `ports:` (they are
+reachable on the bridge network by name); the overlay below removes every publish but the proxy's.
+For host access (`psql` from a laptop), bind to loopback and tunnel:
 
 ```yaml
 ports: ["127.0.0.1:15432:5432"]
@@ -60,27 +50,22 @@ ssh -L 5432:localhost:15432 you@vps    # then psql against localhost:5432
 
 ## Phase 1 — one VPS
 
-Everything on one box, Compose, no orchestrator. This is the correct shape for a long time, and
-[Data and scale](../opinions/data-and-scale.md) is explicit that most products never outgrow
-it.
-
-### Sizing
+Everything on one box under Compose, no orchestrator — the right shape for a long time; most products
+never outgrow it ([Data and scale](../opinions/data-and-scale.md)).
 
 | | vCPU | RAM | Disk |
 |---|---|---|---|
 | Minimum to run | 2 | 4 GB | 40 GB SSD |
 | Comfortable | 4 | 8 GB | 80 GB SSD |
 
-Postgres and Loki want the memory. Disk is dominated by `pgdata` and MinIO — the `loki` bucket is
-bounded by the thirty-day retention, which is the point of having it.
-
-**These numbers assume ClickHouse is not running, which it is not.** It is sized separately below,
-because it does not fit on this box.
+Postgres and Loki want the memory; disk is mostly `pgdata` and MinIO (the `loki` bucket is bounded by
+thirty-day retention). **This assumes ClickHouse is not running** — it is sized separately and does
+not fit on this box.
 
 ### The production overlay
 
-Keep `docker-compose.yml` as the base and add a second file that only says what differs. Compose
-merges them left to right:
+Keep `docker-compose.yml` as the base and add a file with only the differences; Compose merges left
+to right:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
@@ -174,24 +159,17 @@ volumes:
   caddydata:
 ```
 
-**`!override []`** replaces the base file's `ports` list rather than merging with it. Without the tag
-Compose appends, and the publish you were trying to remove stays.
+- **`!override []`** replaces the base `ports` list; without it Compose appends and the publish stays.
+- **`${VAR:?required}`** refuses to start on an unset variable — a Redis started with
+  `--requirepass ""` accepts every connection.
+- **`--maxmemory 512mb`** is what makes `allkeys-lru` trigger; without a ceiling the cache grows
+  until the box does.
 
-**`${VAR:?required}`** makes Compose refuse to start when the variable is unset, instead of
-substituting an empty string. A Redis that silently starts with `--requirepass ""` accepts every
-connection.
+### Readiness
 
-**`--maxmemory 512mb` on the cache** is what makes `allkeys-lru` mean anything. Without a ceiling the
-policy never triggers and the cache grows until the box does.
-
-### Readiness: `depends_on` is the start of the answer, not the whole of it
-
-`depends_on: { postgres: { condition: service_healthy } }` gets the container *started* in the right
-order. It says nothing about whether the app inside it can serve a request — the process still has to
-parse its environment, build a container, and open its own connections.
-
-**`GET /api/health` is that answer**, and it is the endpoint a load balancer, an orchestrator, or a
-`caddy` health check should be pointed at rather than at the port being open:
+`depends_on: … service_healthy` orders container *starts*; it says nothing about whether the app can
+serve. **`GET /api/health` is that answer** — point the load balancer, orchestrator or Caddy at it,
+not at an open port:
 
 ```yaml
   web:
@@ -203,37 +181,28 @@ parse its environment, build a container, and open its own connections.
       start_period: 20s
 ```
 
-**It is a readiness probe, and the distinction decides what happens on a 503.** Readiness means *do
-not send me traffic yet* — a rolling deploy holds the instance out of the pool while Postgres is
-still starting, and puts it back when the answer changes. A liveness probe on the same endpoint kills
-the container instead, which is the wrong response to a dependency that is merely slow, and turns one
-slow database into a restart loop across every instance.
+**Use it as a readiness probe, never liveness.** Readiness holds an instance out of the pool while
+Postgres starts; liveness on the same endpoint kills the container and turns one slow database into a
+restart loop everywhere. The report names `database`, `cache`, `queue` and `analytics` (`null` when
+ClickHouse is not configured — neither healthy nor degraded). **Loki is excluded** — logs are lossy
+by design, so a down collector is no reason to drain a working instance.
 
-The report names `database`, `cache`, `queue` and `analytics`; `analytics` is `null` when ClickHouse
-is not configured, which is neither healthy nor degraded. **Loki is deliberately not in it** — logs
-are lossy by design, so a collector being down is not a reason to drain an instance that is serving
-correctly ([Data and scale](../opinions/data-and-scale.md)).
+**The worker has no HTTP surface.** Its liveness is the `process.started` line with its consumer
+count; its readiness is that it consumes — which is why the `analytics-reconcile` schedule exists:
+no probe finds a worker that died quietly on a Tuesday.
 
-**The worker has no HTTP surface and therefore no equivalent.** Its liveness signal is the
-`process.started` line it emits with its consumer count, and its readiness is that it consumes —
-which is why the `analytics-reconcile` schedule exists ([25](../setup/25-worker-app.md)): a worker
-that died quietly on a Tuesday is not something a probe finds.
+### Logging gets simpler in production
 
-### The one thing that gets simpler in production
-
-**The applications are containers here, and they were not locally.** `pnpm dev` runs on the host, so
-Alloy needed the `infra/logs` file tail to see anything ([alloy](reference/alloy.md)).
-
-In production `web`, `worker` and `realtime` are in the same Compose project, so `discovery.docker` picks them up
-with **no configuration change at all** — the `com.docker.compose.project=ratchet` filter already
-matches them. The file-tail source simply goes unused.
-
-`APP: web`, `APP: worker` and `APP: realtime` are what make the `app` label distinguish the three, which is exactly why
-the pipeline reads that label from the log body rather than from the container name.
+Locally `pnpm dev` runs on the host, so Alloy needs the `infra/logs` file tail
+([alloy](reference/alloy.md)). In production `web`, `worker` and `realtime` are in the same Compose
+project, so `discovery.docker` finds them with **no config change** (the
+`com.docker.compose.project=ratchet` filter matches) and the file tail goes unused. `APP: web|worker|
+realtime` is what distinguishes the `app` label, which is why the pipeline reads it from the log body,
+not the container name.
 
 ### TLS
 
-**`infra/Caddyfile`** — illustrative; write it on the host, it is not in the repository.
+**`infra/Caddyfile`** — illustrative; write it on the host.
 
 ```
 example.com {
@@ -252,38 +221,29 @@ example.com {
 }
 ```
 
-**Compress the web app's responses at the proxy.** The Node server sends them as they are. A
-large doc page is about 1.1 MB raw and 59 KB gzipped, because the sidebar repeats one set of class
-names per link. Leave the stream path out: an encoder buffers, and a buffered event stream reaches
-the tab late or never. Behind nginx, that is `gzip on` in the web location and not in the stream
-one.
-
-**The stream path goes to its own process.** Every open tab holds one or two streams for as long as it
-is open, and `apps/realtime` holds all of them so the web app's event loop holds none. The browser
-still sees one origin, which is what lets the session cookie ride along. Behind nginx instead, the
-location block wants `proxy_buffering off` and `proxy_read_timeout` above the thirty-minute stream age.
-
-Caddy obtains and renews Let's Encrypt certificates automatically, and `caddydata` persists them —
-without that volume you re-issue on every deploy and hit rate limits. Traefik and nginx both work;
-Caddy is four lines.
-
-Note both targets are **service names on the bridge network**. Caddy is the only container with a
-published port.
+- **Compress web responses at the proxy** — Node sends them raw, and a large doc page is ~1.1 MB raw
+  vs 59 KB gzipped (the sidebar repeats class names per link). **Never the stream path**: a buffered
+  event stream arrives late or never. In nginx: `gzip on` in the web location only.
+- **Streams go to their own process.** Every tab holds one or two streams while open; `apps/realtime`
+  holds all of them so the web event loop holds none. One origin keeps the session cookie riding
+  along. In nginx the stream location needs `proxy_buffering off` and `proxy_read_timeout` above the
+  thirty-minute stream age.
+- Caddy issues and renews Let's Encrypt certificates; `caddydata` persists them (without it every
+  deploy re-issues and hits rate limits). Both targets are bridge-network service names; Caddy is the
+  only published port.
 
 ### Secrets
 
-`.env.production` lives on the VPS and is never committed. `.gitignore` already covers `.env.*` with
-one exception for `.env.example`, so this is enforced rather than remembered.
-
-Generate real values — the local ones are `ratchet` everywhere on purpose, because a scratch database
-behind a secret is a scratch database nobody can debug:
+`.env.production` lives on the VPS, never committed — `.gitignore` covers `.env.*` except
+`.env.example`. Local values are `ratchet` on purpose (a scratch database behind a secret is one
+nobody can debug); generate real ones:
 
 ```bash
 openssl rand -base64 32      # AUTH_SECRET, POSTGRES_PASSWORD, REDIS_PASSWORD, …
 ```
 
-Anything better than a file — Docker secrets, SOPS, a cloud secret manager — is an improvement and
-none of it changes the application, which reads `process.env` in exactly two files.
+Docker secrets, SOPS or a cloud secret manager improve on a file without changing the application,
+which reads `process.env` in exactly two files.
 
 ### Deploying
 
@@ -294,20 +254,14 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm web pnp
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-**Migrations run before the new containers start**, as a one-shot. Running them from a container that
-is already serving traffic means the old code briefly meets the new schema.
+**Migrate as a one-shot before new containers start**, or old code briefly meets the new schema.
+Hence: **every migration must work with the currently running code** — add a column, deploy the
+writer, drop the old column later; a rename is two deploys. Building on the VPS is slow; building in
+CI and pushing to a registry only turns `build:` into `image:`.
 
-That ordering forces a discipline worth naming: **every migration must be compatible with the
-currently-running code**. Add a column before writing to it, deploy the writer, then remove the old
-column in a later release. A rename is two deploys.
+### Backups — the part that matters
 
-Building on the VPS keeps the setup to one machine and costs a slow deploy. Building in CI and
-pushing to a registry is the next step, and changes only where `build:` becomes `image:`.
-
-### Backups — the part that actually matters
-
-The derived-store table in [index](index.md) already says what must be backed up, because it says
-what cannot be rebuilt:
+What cannot be rebuilt must be backed up:
 
 | Volume | Back up? | Why |
 |---|---|---|
@@ -324,19 +278,17 @@ docker compose exec -T postgres pg_dump -U ratchet -Fc ratchet > backup-$(date +
 docker compose exec -T minio mc mirror local/ratchet /backup/ratchet
 ```
 
-> **A backup you have not restored is a hypothesis.** Restore into a scratch database and run the
-> app against it, on a schedule. This is the single most commonly skipped step on a self-hosted VPS
-> and the only one that is unrecoverable.
+> **A backup you have not restored is a hypothesis.** Restore into a scratch database and run the app
+> against it on a schedule — the most skipped step on a self-hosted VPS, and the unrecoverable one.
 
-`pg_dump` is adequate up to a few tens of gigabytes. Past that, continuous archiving — WAL-G or
-pgBackRest to object storage — gives point-in-time recovery, and is the moment managed Postgres
-starts looking cheap.
+`pg_dump` suits a few tens of gigabytes; past that, WAL-G or pgBackRest to object storage gives
+point-in-time recovery — and managed Postgres starts looking cheap.
 
 ---
 
 ## What breaks first
 
-In rough order, and none of them is the database:
+In rough order, and none is the database:
 
 | Symptom | Move to |
 |---|---|
@@ -347,13 +299,11 @@ In rough order, and none of them is the database:
 | A bad deploy loses queued jobs | Managed Redis for the queue, with real persistence |
 | One machine is a single point of failure | Everything below |
 
-**Two web replicas is the highest-value early move**, and the architecture already permits it: the
-web tier is stateless by construction — no request state in `Container`, no module-scope
-`QueryClient`, sessions in Postgres and Redis. The worker is separate and BullMQ's repeatable jobs
-dedupe across replicas, so it scales independently.
+**Two web replicas is the best early move** — the web tier is stateless (no request state in
+`Container`, no module-scope `QueryClient`, sessions in Postgres and Redis), and the worker scales
+separately since BullMQ repeatable jobs dedupe across replicas.
 
-**One queue can scale alone.** `WORKER_QUEUES` picks which queues a worker service serves, so a
-backlog in one queue is a second service, not more copies of everything:
+**One queue can scale alone:** `WORKER_QUEUES` picks the queues a worker service serves.
 
 ```yaml
   worker:
@@ -365,21 +315,18 @@ backlog in one queue is a second service, not more copies of everything:
     deploy: { replicas: 3 }
 ```
 
-Every queue must be served by at least one service — a queue nobody serves fills silently. See
+Every queue needs at least one service — an unserved queue fills silently. See
 [the supervisor](../../apps/worker/docs/reference/supervisor.md).
 
 ### Scaling the assistant
 
-An answer is slow I/O, not CPU: a worker waits on the provider while it streams. So one worker
-process holds **`WORKER_ASSISTANT_CONCURRENCY` answers at once** (32 by default), and its
-throughput is that number divided by how long an answer takes. Past it, questions wait in the
-`assistant` queue. They are not refused.
+An answer is slow I/O, not CPU. One worker process holds **`WORKER_ASSISTANT_CONCURRENCY` answers at
+once** (default 32); throughput is that divided by answer duration, and the excess waits in the
+`assistant` queue rather than being refused.
 
-`pnpm assistant:load` measures it. Run it against `ASSISTANT_PROVIDER=fake`, with
-`ASSISTANT_FAKE_DELAY_MS` set so a fake answer takes as long as a real one. Measured 2026-11-10 on
-one 4-core, 16 GB laptop, with `pnpm dev`, every container and the load generator on the same
-machine. Each row is 240 questions from 60 users, and every answer was about three seconds of
-streaming:
+`pnpm assistant:load` measures it, against `ASSISTANT_PROVIDER=fake` with `ASSISTANT_FAKE_DELAY_MS`
+set to a realistic duration. Measured 2026-11-10 on one 4-core, 16 GB laptop running `pnpm dev`, every
+container and the load generator; each row is 240 questions from 60 users, ~3 s of streaming each:
 
 | Answers at once | Answers a second | Send p95 | First word p50 / p95 | Finished p50 / p95 | Failed |
 |---|---|---|---|---|---|
@@ -387,32 +334,31 @@ streaming:
 | 30 | 9.2 | 873 ms | 490 / 1 656 ms | 3.0 / 4.3 s | 0 |
 | 60 | 10.3 | 635 ms | 2.9 / 4.0 s | 5.4 / 6.5 s | 0 |
 
-**The ceiling is the lane, as designed.** At 60 the worker's 32 slots are full: throughput stops
-at about 32 ÷ 3 s, and the excess shows as time to the first word, which is queue wait. One web
-process and one realtime process carried 60 open streams without an error. Read the numbers as a
-shape, not a capacity: development mode, one machine, and a provider that never slows down.
+**The ceiling is the lane, by design:** at 60 the 32 slots are full, throughput stops near 32 ÷ 3 s,
+and the excess shows as time-to-first-word (queue wait). One web and one realtime process carried 60
+open streams without error. Read it as a shape, not a capacity — dev mode, one machine, a provider
+that never slows.
 
-For the plan's 100K users (`docs/plans/archive/AI-CHAT-PLAN.md`: about 5K answers at once, a 10K peak):
+For 100K users (about 5K answers at once, a 10K peak):
 
 | Bottleneck | What moves it |
 |---|---|
-| Answers at once | More slots in a process (`WORKER_ASSISTANT_CONCURRENCY`), then more worker services with `WORKER_QUEUES=assistant`. About 160 processes at 32 slots each hold 5K. The platform Workers page autoscales a lane between its min and max |
-| The provider | `WORKER_ASSISTANT_RATE_PER_MINUTE` caps what is sent; OpenRouter or several keys spread it. The provider contract is the real ceiling, and nothing here raises it |
-| Open streams | More `apps/realtime` replicas behind the proxy. A stream is open only while its answer is |
+| Answers at once | More slots (`WORKER_ASSISTANT_CONCURRENCY`), then more worker services with `WORKER_QUEUES=assistant` — about 160 processes at 32 slots hold 5K. The platform Workers page autoscales a lane between its min and max |
+| The provider | `WORKER_ASSISTANT_RATE_PER_MINUTE` caps what is sent; OpenRouter or several keys spread it. The provider contract is the real ceiling |
+| Open streams | More `apps/realtime` replicas behind the proxy; a stream is open only while its answer is |
 | Redis fan-out | `REDIS_ASSISTANT_URL` on its own instance. Keys carry hash tags, so Redis Cluster is an adapter change |
 | One person, or one tenant | `ASSISTANT_ACTIVE_PER_USER`, `assistant.send`'s 20 a minute, and `ASSISTANT_ORG_DAILY_TOKENS` |
 
-**The script signs in one user per two answers you ask for**, because a person may run two answers
-at once and send 20 questions a minute. It signs up `load-<n>@example.test` through Mailpit the
-first time, at the auth limit of five sign-ups a minute, and keeps their sessions in the temp
-directory for the next run.
+The script signs in one user per two requested answers (a person may run two at once and send 20 a
+minute), signing up `load-<n>@example.test` through Mailpit on first run at the auth limit of five
+sign-ups a minute, and caches sessions in the temp directory.
 
 ---
 
 ## Phase 2 — managed services, in risk order
 
-Move things **in increasing order of how much it hurts to get wrong**, not in order of cost. Each row
-is one or two lines in `.env.production` and a restart.
+Move in **increasing order of how much a mistake hurts**, not cost. Each row is a line or two in
+`.env.production` and a restart.
 
 | # | Service | Becomes | Config change | Risk |
 |---|---|---|---|---|
@@ -422,11 +368,10 @@ is one or two lines in `.env.production` and a restart.
 | 4 | redis-queue | a **separate** managed Redis | `REDIS_QUEUE_URL` | medium — drain first |
 | 5 | Postgres | RDS / Cloud SQL / Neon | `DATABASE_URL` | high — the real migration |
 
-**ClickHouse is deliberately not in that table.** Every row above is *the same capability, operated
-by somebody else*. Adopting ClickHouse is a **new capability** on a different axis, and it has its own
-section below.
+ClickHouse is not here: every row is the same capability run by someone else, and ClickHouse is a new
+capability (below).
 
-### 1. Logs first, because losing them costs nothing
+### 1. Logs — losing them costs nothing
 
 ```alloy
 loki.write "default" {
@@ -440,32 +385,27 @@ loki.write "default" {
 }
 ```
 
-Drop `loki` from the overlay and keep Alloy. **The pipeline, the four labels, and the
-event catalog are unchanged** — this is the payoff for never letting a package import a Loki client
-([Dependencies](../opinions/dependencies.md) Tier 0).
-
-Start here because it is free to reverse and it removes the largest memory consumer after Postgres.
+Drop `loki` from the overlay and keep Alloy. **The pipeline, four labels and event catalog are
+unchanged** — the payoff of no package importing a Loki client. Free to reverse, and it removes the
+largest memory consumer after Postgres.
 
 ### 2. Object storage
 
-Uploaded objects are immutable and addressed by key, so this is a copy and a flip rather than a
-migration:
+Objects are immutable and keyed, so it is a copy and a flip:
 
 ```bash
 mc mirror --watch local/ratchet s3/your-bucket    # runs until you stop it
 ```
 
-Then change five values and restart. `S3_FORCE_PATH_STYLE=false` is the one that is easy to miss and
-produces DNS errors that name a bucket-prefixed host.
+Then change five values and restart. `S3_FORCE_PATH_STYLE=false` is the easy one to miss; it shows as
+DNS errors naming a bucket-prefixed host. The `loki` bucket does not move if step 1 is done.
 
 #### The bucket's CORS rule
 
-The browser uploads a doc image straight to the bucket, so the bucket must allow the app's origin.
-MinIO answers every origin by default; S3 and R2 answer none, and an upload then fails in the
-browser with a CORS error that appears in no server log. Allow `POST`: the upload is a presigned
-`POST` whose policy binds the size and type, so the bucket refuses anything larger than the limit.
-`GET` and `HEAD` are not needed: `/api/doc-image/…` answers with a redirect to
-a signed URL that an `<img>` follows, and no script fetches the bytes.
+Browsers upload doc images straight to the bucket; MinIO answers
+every origin, S3 and R2 none, and the failure is a browser CORS error in no server log. Allow only
+`POST` — the upload is a presigned `POST` whose policy binds size and type. `GET`/`HEAD` are
+unnecessary: `/api/doc-image/…` redirects an `<img>` to a signed URL.
 
 ```json
 {
@@ -486,117 +426,77 @@ aws s3api put-bucket-cors --bucket your-bucket --cors-configuration file://cors.
 aws s3api get-bucket-cors --bucket your-bucket     # read it back
 ```
 
-`AllowedOrigins` is the app's public origin (`APP_BASE_URL`) with no trailing slash, one entry per
-origin; add the staging one to the same rule. R2 takes the same JSON in the dashboard under the
-bucket's settings, in its own `AllowedOrigins` / `AllowedMethods` shape.
-
-The local stack cannot be given this rule: its MinIO has no bucket CORS API (`mc cors set` is
-refused as "not implemented"), so `minio-init` leaves it alone. See
+`AllowedOrigins` is `APP_BASE_URL` with no trailing slash, one entry per origin (add staging to the
+same rule). R2 takes the same JSON in the bucket settings. Local MinIO has no bucket CORS API
+(`mc cors set` is "not implemented"), so `minio-init` leaves it alone — see
 [the compose reference](reference/compose.md).
-
-**The `loki` bucket does not need moving** — if step 1 is done, the managed log host owns that storage.
 
 ### 3 and 4. The two Redis instances, separately
 
-**The cache is trivial**: change the URL, restart, accept a cold minute while it refills from
-Postgres. This is what "derived" buys.
+**The cache:** change the URL, restart, accept a cold minute while it refills from Postgres.
 
-**The queue is not.** A queued job exists nowhere else, so:
+**The queue holds jobs that exist nowhere else:**
 
-1. Pause every queue from the platform **Workers** page, or stop the worker; let publishers keep
+1. Pause every queue from the platform **Workers** page (or stop the worker); publishers keep
    enqueueing to the old instance.
-2. Wait for depth to reach zero.
+2. Wait for depth zero.
 3. Flip `REDIS_QUEUE_URL`, restart both.
 4. Confirm the old instance is empty before deleting it.
 
-**Keep them as two managed instances.** Consolidating to save a few dollars re-creates exactly the
-problem the local split exists to prevent: one eviction policy for two incompatible durability needs
-([redis](reference/redis.md)).
-
-Managed Redis providers differ on `noeviction` support and persistence guarantees — check both before
-choosing, because a queue on an instance that evicts is a queue that loses work silently.
+**Keep two managed instances** — consolidating recreates one eviction policy for two durability needs
+([redis](reference/redis.md)). Check each provider's `noeviction` support and persistence: a queue on
+an evicting instance loses work silently.
 
 ### 5. Postgres last
 
-Highest value, highest risk, and the one where the managed option is most worth paying for —
-backups, point-in-time recovery, and failover stop being your problem.
+Highest value, highest risk, and most worth paying for — backups, point-in-time recovery and failover
+stop being your problem.
 
-Two routes:
+- **Dump and restore:** simple, with a maintenance window sized by your data.
 
-**Dump and restore.** Simple, needs a maintenance window sized by your data.
+  ```bash
+  pg_dump -Fc $OLD | pg_restore -d $NEW
+  ```
 
-```bash
-pg_dump -Fc $OLD | pg_restore -d $NEW
-```
+- **Logical replication:** near-zero downtime, more moving parts — replicate, let it catch up, pause
+  briefly to switch `DATABASE_URL`. Most providers document or tool it.
 
-**Logical replication.** Near-zero downtime, more moving parts: replicate into the managed instance,
-let it catch up, then a brief pause to switch `DATABASE_URL`. Most managed providers document this
-path and some tool it.
-
-Whichever you choose, **verify the extensions exist on the target first**. `pgvector` is not available
-everywhere, and finding out after the dump is a bad afternoon:
+**Check extensions on the target first** — `pgvector` is not everywhere:
 
 ```sql
 SELECT * FROM pg_available_extensions WHERE name IN ('vector', 'pg_trgm', 'uuid-ossp');
 ```
 
-Also confirm the partitioned tables arrived as partitioned rather than as one flat table — a
-`pg_dump`/`restore` preserves partitioning, but a naive `COPY`-based migration does not, and
-`activity_log` silently becomes a table that will need the painful conversion later
-([13](../setup/13-infrastructure-postgres.md)).
+**Confirm partitioned tables arrived partitioned.** `pg_dump`/`restore` preserves it; a naive
+`COPY`-based migration flattens `activity_log` into a table needing the painful conversion later.
 
 ---
 
 ## Adopting ClickHouse — a different axis
 
-Everything in Phase 2 is *the same capability, operated by somebody else*. This is not that: it is a
-**new store, a new consumer, and a new dependency**, and it happens on its own timeline. You can run
-ClickHouse on the original VPS or reach ClickHouse Cloud from a fully-managed stack; the two
-decisions do not interact.
+Not the same capability run by someone else, but a **new store, consumer and dependency** on its own
+timeline — on the original VPS or as ClickHouse Cloud, independently of Phase 2. **Do not start here:**
+Postgres covers this kit's questions for years, and the container is deliberately stopped.
 
-**Do not start here.** [Data and scale](../opinions/data-and-scale.md) is explicit that Postgres
-covers every question this kit will ask for years, and the container in the compose file is
-deliberately stopped.
-
-### The trigger, and the prerequisite
-
-**The trigger:** snapshot tables stop covering the questions being asked. Not "the table is large",
-not "ClickHouse would be faster" — the specific moment when people want aggregates nobody precomputed.
-
-**The prerequisite is the part that gets skipped.** ClickHouse is fed by the worker consuming domain
-events, so before the store is worth starting, three things must exist:
+**The trigger:** snapshot tables stop covering the questions asked — not "the table is large" or "it
+would be faster". **The prerequisites, which get skipped:**
 
 1. **A projection consumer** on the `analytics` queue, writing rows.
-2. **A daily reconciliation job**, comparing row counts per day against the activity log.
-3. **A replay path** — the ability to rebuild the whole store from the activity log.
+2. **A daily reconciliation** comparing per-day counts against the activity log.
+3. **A replay path** rebuilding the store from the activity log.
 
-Without the first, a running ClickHouse is an empty database that looks like a decision. Without the
-second, a consumer that dies quietly on a Tuesday surfaces as a wrong number in March. Without the
-third, the store is not derived at all, whatever the documentation claims.
+Without 1 the store is an empty database that looks like a decision; without 2 a consumer dead since
+Tuesday becomes a wrong number in March; without 3 it is not derived, whatever the docs claim.
 
-### What changes in the code
+**In code:** the write half ships (`ClickHouseAnalyticsProjector`, the projection consumer, nightly
+reconciliation, enabled by `CLICKHOUSE_URL`). The read half is deliberately absent: a new port in
+`packages/application/src/port/`, an adapter, one `Container` line and the real dashboard queries — a
+day's work against a store already filling ([Simplicity](../opinions/simplicity.md) on the deleted
+guess). `ContainerConfig` gains an `analytics` block and `apps/*/src/env.ts` its variables.
 
-The write half is already written: `ClickHouseAnalyticsProjector`, the projection consumer and the
-nightly reconciliation ship, and `CLICKHOUSE_URL` turns them on
-([15](../setup/15-infrastructure-package.md)).
-
-The read half is not, and that is deliberate. Adding it is a new port in
-`packages/application/src/port/`, an adapter behind it, one line in `Container`, and the queries the
-dashboard actually asks — a day's work against a store that has been filling and reconciling for
-days. The kit shipped that port once, guessed at two questions, and deleted it unused; see
-[Simplicity](../opinions/simplicity.md).
-
-`ContainerConfig` gains an `analytics` block, and `apps/*/src/env.ts` gains the variables to fill it —
-still the only two files in the repository that read `process.env`.
-
-### On the VPS: give it its own box
-
-**ClickHouse and Postgres on one machine is the mistake to avoid.** ClickHouse is designed to use as
-much memory and I/O as it can get — that is what makes it fast — and an OLTP database whose
-performance depends on a warm page cache is the worst possible neighbour. Under a heavy analytical
-query, Postgres latency degrades in a way that looks like a database problem and is a scheduling one.
-
-If it must share, cap it explicitly and accept that you have made both slower:
+**On a VPS, give it its own box.** ClickHouse takes all the memory and I/O it can, and Postgres
+depends on a warm page cache; under a heavy query Postgres latency degrades in a way that looks like a
+database problem and is a scheduling one. If it must share, cap it and accept both are slower:
 
 ```yaml
 clickhouse:
@@ -608,62 +508,36 @@ clickhouse:
       limits: { memory: 4G }
 ```
 
-A separate instance wants materially more than the application box:
-
 | | vCPU | RAM | Disk |
 |---|---|---|---|
 | Smallest useful | 4 | 16 GB | 200 GB SSD |
 
-Reaching it across machines means a private network — a VPC, WireGuard, or the provider's internal
-network. **Not the public internet**: the same rule as every other store, and ClickHouse's HTTP port
-is as attractive to scanners as Postgres's.
+Reach it over a private network (VPC, WireGuard, the provider's internal network), never the public
+internet. **`CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1` in the base compose is a local convenience** —
+set a real password and drop it before anything reachable.
 
-> **`CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1` in the base compose file is a local convenience.** It
-> exists so a scratch instance is easy to poke at. Set a real password and drop it before anything
-> reachable by anyone else.
+**Backups: none, which is a claim to test.** `clickhousedata` is rebuildable only if replay works.
+Before relying on it: replay a month into a scratch instance, compare counts and a few aggregates, and
+time it (a four-day rebuild is no recovery plan). The daily reconciliation is the same query on one
+day. **Needing to back it up is a signal** that something authoritative lives there — most likely a
+KPI in a materialized view stored nowhere else.
 
-### Backups: none, and that is a claim to test
-
-`clickhousedata` is not in the backup table, because the store is rebuildable by replaying the
-activity log from Postgres.
-
-**That is only true if the replay actually works**, and the day you need it is the wrong day to find
-out. Before relying on it:
-
-1. Replay a month into a scratch ClickHouse.
-2. Compare row counts and a few aggregates against the live store.
-3. Time it — a rebuild that takes four days is not a recovery plan.
-
-The reconciliation job is the same query, run daily on one day of data. If it is in place, this test
-is mostly already running.
-
-**Backing up ClickHouse instead is a signal, not a shortcut.** If a replay is not viable, something is
-authoritative there that should not be — most likely a KPI computed in a materialized view and stored
-nowhere else, which is exactly the way the store stops being derived.
-
-### Managed
-
-ClickHouse Cloud, Altinity.Cloud and Aiven all run it. The migration path is unusual and pleasant:
-**there is nothing to migrate.** Point the consumer at the managed instance, replay, and drop the old
-one — the property that makes backups unnecessary makes the move trivial too.
-
-This is the one store where "managed from day one" is the easy call, because the operational burden
-is high and the switching cost is near zero.
+**Managed** (ClickHouse Cloud, Altinity.Cloud, Aiven) has **nothing to migrate**: point the consumer
+at it, replay, drop the old one. With a high operational burden and near-zero switching cost, it is
+the one store where "managed from day one" is the easy call.
 
 ---
 
 ## What never changes
 
-Worth stating plainly, because it is most of the system.
-
-- **`packages/application`** — sharding and hosting are repository concerns; use-cases never learn.
-- **`packages/permissions`** — pure computation, identical answer in every runtime.
+- **`packages/application`** — sharding and hosting are repository concerns.
+- **`packages/permissions`** — pure computation, identical in every runtime.
 - **`packages/contracts`** — unchanged.
-- **The event catalog and the four log labels** — the pipeline moves, the vocabulary does not.
-- **Every port** — `CacheStore`, `QueuePublisher`, `StorageGateway`, `VectorStore`, `AnalyticsProjector`.
-  A managed service is a different constructor argument in `Container`, one line each.
-- **`.env` as the only config surface** — enforced by `check-architecture.mjs` §3, which is why
-  "move a service" is never a code search.
+- **The event catalog and four log labels** — the pipeline moves, the vocabulary does not.
+- **Every port** — `CacheStore`, `QueuePublisher`, `StorageGateway`, `VectorStore`,
+  `AnalyticsProjector`; a managed service is one different constructor argument in `Container`.
+- **`.env` as the only config surface** — `check-architecture.mjs` §3, so moving a service is never a
+  code search.
 
-The compose file, the overlay, and `.env.production` are the entire deployment surface. That is the
-claim the architecture makes, and this page is where it either holds or does not.
+The compose file, the overlay and `.env.production` are the whole deployment surface — the
+architecture's claim, and this page is where it holds or does not.

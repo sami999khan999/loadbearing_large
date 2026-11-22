@@ -1,131 +1,45 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-11-12
+updated: 2026-11-21
 owner: sami
 schema: backlog/v1
-source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
 ---
 
 # Backlog
 
-**This is the only open ledger, and it holds only what is open.** What has closed is in
-[`archive/DONE.md`](archive/DONE.md). What sessions left on a developer machine is in
-[`archive/STATE.md`](archive/STATE.md). Every finished plan is in [`archive/`](archive/index.md); the
-only other live file is `HANDOFF.md`.
+**The only open ledger.** Close an entry by fixing it and deleting it; git history keeps the rest.
+Each entry keeps its original ID. A new decision goes in the entry and says what it supersedes.
 
-> **How to use this file**
->
-> 1. **Every entry keeps its original ID** — `24.7`, `S.2` — and points at the archived file and
->    line that hold the full text. Read the body before acting on a summary.
-> 2. **Close it by moving it.** Fix the item, move its entry to [`archive/DONE.md`](archive/DONE.md)
->    under the same section number with its proof, and add the changelog row there.
-> 3. **Nothing here is a place to argue a decision.** The argument is in the archived body. A new
->    decision goes in the entry and says it supersedes.
-> 4. **Line numbers are as of `885e144`** and stable, because the archived files no longer change.
->    If one is ever off, the ID is the truth.
+None of these can be closed by writing code today: each waits on hardware, real traffic, or a trigger.
 
-| Section | What | Open | Closed, in `archive/DONE.md` |
-|---|---|---|---|
-| 1 | `archive/PLAN.md` boxes, Phases 23–25 | 1 | 32 |
-| 3 | `archive/STUCK.md` blockers | 2 | 1 |
-| 6 | Conditional work — triggers, not tasks | 5 | — |
-| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 1 | 8 |
-| 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
-
-Sections 2, 4, 5, 7 to 10, 12 and 14 to 23 are closed in full: 45 defects, 6 buried items, 9
-verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
-check's 17, `WC.1`, all forty-nine of the 2026-09-25 review, the 2026-09-28 and 2026-10-10
-reviews, and the hand walks and benchmark that closed 15, 16, 17, 22 and 23. Their entries are in
-`archive/DONE.md`, the walks under §23.
-
-**Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
-a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
-**Section 11 is down to one that needs hardware**: `26.8` needs a machine that holds 250 000
-users. `26.4` closed 2026-11-12, superseding D47. **Section 13 is a trigger**, `AX11.2`.
-
----
-
-## 1. `archive/PLAN.md` — the one open box
+## Open
 
 - [ ] `24.7` **A pooled partition for the long tail** — small tenants share one `<table>_pool`
-  list partition and graduate on a size line. **Its gate is relation count now, measured by
-  `PF.0`**: a tenant-level attach grows with siblings (~3 ms at 100 tenants, ~27 ms at 2 000), and
-  one unpruned read of `notifications` at full retention exhausts the lock table at ~1 800 tenants
-  (`PF.7`). Plan time is flat and the runway is 1.6 s at 2 000, so the old triggers would never
-  fire. — `archive/PLAN.md:4015`
-
-## 3. `archive/STUCK.md` — what a session could not do, and why
-
-- [ ] `S.2` **Check the analytics projection and `/analytics` against real traffic.**
-  - **Narrowed 2026-09-25.** The reader was built against seeded data, decided with the user, so
-    nothing waits on this any more. What is left is the check: run the worker on real traffic for
-    a few days, let the reconciliation come back clean, and look at `/analytics` against it.
-  - Its history, and why `23.21` had to come first, is in `archive/DONE.md`, "Moved out of
-    `BACKLOG.md`". — `archive/STUCK.md`
-- [ ] `S.3` **Phase 24 wants a second node that is provisioned**, not a second container on one
-  machine. Everything Phase 24 built is proved against the two-node compose profile, including
-  `24.6`'s load test. What only a real server gives is numbers a capacity plan can use: the
-  commit time here is Docker Desktop's `fsync`, about 100 ms. — `archive/STUCK.md`
-
----
-
-## 6. Conditional work — "reopen when"
-
-Not open today. Each is a trigger written into a ticked item, so the next person does not decide on
-a feeling.
-
-- `24.7` **pooled partition** — ~~when planning passes 5 ms or the runway passes ten minutes~~;
-  **re-stated 2026-09-24**: when a node heads past ~1 800 tenants, the point where one unpruned
-  read exhausts the lock table, or a tenant-level attach passes ~50 ms. Section 1 has the numbers.
-  — `archive/PLAN.md:1349`
-- `21.1` **per-user object layout for `notifications`** — when p95 on the archived view passes
-  500 ms; every page turn gunzips the whole tenant-month object today. — `archive/PLAN.md:2691`
-- `16.7` **`unreadCounts` pruning assertion** — reopen if the read changes; its floor is
-  `last_read_at`, a correlated subquery. — `archive/PLAN.md:1235`
-- `24.1` **user delete as a maintenance job** — at a few thousand tenants on a node, under either
-  option. — `archive/PLAN.md:3968`
-- **Two policy-shaped constants** — the two-month runway and the thirty-day cold grace could move
-  onto `platform_policy` in an afternoon if an operator asks. — `archive/PLAN.md:1745`
-
-**`max_locks_per_transaction` stays 1 024** until a node heads toward `24.7`'s ~1 800 tenants. Past
-that, one unpruned read of `notifications` at full retention exhausts the lock table. Nothing in the
-application issues one. — `PF.7`, `archive/DONE.md` §9
-
----
-
-## 11. Communication features — `archive/COMMUNICATION.md`
-
-Deferred whole on 2026-09-22 because they shared one unstated requirement — messaging, email and
-notifications must not slow the app down. That requirement is the performance plan, and it is
-built; what it changed for each item is on the item. The decisions reached for them are
-`archive/COMMUNICATION.md:51`, and three things their older entries get wrong are `:71`.
-The full original text is in `archive/PLAN.md` under the same IDs.
-
-### Messaging
-
+  list partition and graduate on a size line. Its gate is relation count, measured by `PF.0`: a
+  tenant-level attach grows with siblings (~3 ms at 100 tenants, ~27 ms at 2 000), and one unpruned
+  read of `notifications` at full retention exhausts the lock table at ~1 800 tenants (`PF.7`).
+  **Trigger:** a node heads past ~1 800 tenants, or a tenant-level attach passes ~50 ms.
+- [ ] `S.2` **Check the analytics projection and `/analytics` against real traffic.** Run the
+  worker on real traffic for a few days, let the reconciliation come back clean, and look at
+  `/analytics` against it. The reader was built against seeded data, so nothing else waits on this.
+- [ ] `S.3` **Phase 24 on a provisioned second node**, not a second container on one machine.
+  Everything is proved on the two-node compose profile, including `24.6`'s load test; only a real
+  server gives capacity numbers (commit time here is Docker Desktop's `fsync`, ~100 ms).
 - [ ] `26.8` **The 250 000-recipient fan-out load test.** Needs a machine that can hold a `users`
   row per recipient. Measures the paged fan-out and batched suppression from `CP4.3`, `CP4.6`.
-  — `archive/COMMUNICATION.md:32`
-
-
----
-
-## 13. Access and visibility plan — what is left
-
-Built 2026-09-28 to 2026-09-30 and archived; every body is on its item in
-[`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md), by ID and line. The hand walk (`AX11.3`) passed every Exit line
-on 2026-09-30.
-
-### Waiting on a trigger
-
 - [ ] `AX11.2` **Retire `widget.dismissal`** — remove the flag's entry, the `flag` field on
   `core.hidden-widgets`, both `assertOn` calls and the `DISMISSAL` checks in `feature` and
   `apps/web`. **Trigger:** the flag is on for every org, and in any case before its `expiresOn` of
-  2027-03-31. It is off everywhere today. — `archive/ACCESS-AND-VISIBILITY-PLAN.md:1373`
+  2027-03-31. It is off everywhere today.
 
----
+## Reopen when
 
-## Changelog
-
-**In [`archive/DONE.md`](archive/DONE.md)**, beside the entries it explains. New rows go there, at
-the top.
+- `21.1` **Per-user object layout for `notifications`** — when p95 on the archived view passes
+  500 ms; every page turn gunzips the whole tenant-month object today.
+- `16.7` **`unreadCounts` pruning assertion** — if the read changes; its floor is `last_read_at`,
+  a correlated subquery.
+- `24.1` **User delete as a maintenance job** — at a few thousand tenants on a node.
+- **Two policy-shaped constants** — the two-month runway and the thirty-day cold grace could move
+  onto `platform_policy` in an afternoon if an operator asks.
+- **`max_locks_per_transaction` stays 1 024** until a node heads toward `24.7`'s ~1 800 tenants.
+  Nothing in the application issues an unpruned read of `notifications`.

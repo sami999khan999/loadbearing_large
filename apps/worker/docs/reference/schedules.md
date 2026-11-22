@@ -1,6 +1,6 @@
 ---
 title: The schedules
-description: Five repeatable entries, the fixed job ids that make registration idempotent, the clock order that keeps them off each other's locks, and why none of them retries.
+description: Nine repeatable entries and one boot job, the fixed job ids that make registration idempotent, the clock order that keeps them off each other's locks, and why only the digest retries.
 ---
 
 # The schedules
@@ -10,118 +10,85 @@ description: Five repeatable entries, the fixed job ids that make registration i
 | `outbox-drain` | every second | `EVENT` |
 | `partitions-monthly` | 02:00 on the first | `MAINTENANCE` |
 | `cleanup-daily` | 03:00 daily | `MAINTENANCE` |
-| `reconcile-daily` | 05:00 daily | `ANALYTICS` |
-| `projection` | every five minutes | `ANALYTICS` |
+| `retention-daily` | 03:30 daily | `MAINTENANCE` |
+| `orphans-daily` | 04:00 daily | `MAINTENANCE` |
+| `analytics-reconcile` | 05:00 daily, with a projector | `ANALYTICS` |
+| `digest-hourly` | on the hour | `NOTIFICATION` |
+| `spares-topup` | every five minutes | `MAINTENANCE` |
+| `analytics-projection` | every five minutes, with a projector | `ANALYTICS` |
+
+`partitions-boot` is not repeatable: `runOnce()` adds it at every boot, before the schedules register.
+`digest-hourly` sends only tenants whose digest hour it is (`26.7`; unset is 07:00 UTC) and removes the
+retired `digest-daily` entry, which would otherwise double-send.
 
 ## The clock order is not arbitrary
 
-On the first of the month both monthly jobs run, in this order and for these reasons:
+On the first of the month:
 
-- **02:00 partitions.** A sweep that runs while the current month has no partition fails on a table
-  it cannot write to, so the runway is extended before anything else touches `activity_log`. This
-  is also the job that archives and drops what has aged out, which is why it goes first.
-- **03:00 cleanup.** After the runway exists.
-- **05:00 reconcile.** So on that one morning of the month it reads a window the retention pass has
-  already finished with.
+- **02:00 partitions** — the runway is extended before anything touches `activity_log`; the same job
+  archives and drops what aged out.
+- **03:00 cleanup**, after the runway exists. **03:30 retention** (bucket lifecycle and ClickHouse TTL
+  converged, archive rows expired, deleted tenants swept) and **04:00 orphans** run no partition DDL.
+- **05:00 reconcile**, reading a window retention has finished with.
 
 ## Every time is UTC
 
-BullMQ reads a cron pattern in the process's own timezone unless told otherwise, so a worker
-with `TZ` set, or on a host not set to UTC, ran each nightly job at that local hour. The digest's
-day is a UTC day, so its schedule could cover the wrong one. Each cron entry now passes
-`tz: "UTC"` through `UtcCron`. The `tz` is part of a repeatable entry's key, so registration first
-removes the entry an earlier version registered without it; otherwise both would run.
+BullMQ reads cron in the process timezone, so a non-UTC host ran nightly jobs at local hours (and the
+digest's UTC day could be wrong). Each entry passes `tz: "UTC"` via `UtcCron`; since `tz` is part of the
+key, registration first removes the old tz-less entry, else both run.
 
 ## A fixed job id is what makes registration idempotent
 
-Every schedule registers on **every boot**. Without a fixed id, each deploy adds another repeatable
-entry and the nightly job runs eleven times by Friday.
-
-The `Queue` object exists only to publish the repeatable entry and is closed immediately: left open
-it holds a second connection to the queue instance for the life of the process.
-
-Schedules register **after** the consumers start, so a repeatable entry that fires the instant it
-lands has somewhere to run. Registering a schedule onto a queue with no consumer is what left
+Every schedule registers on **every boot** — without a fixed id the nightly job runs eleven times by
+Friday. The `Queue` is closed right after publishing (else a second connection for life). Schedules
+register **after** consumers start, so an instant fire has a runner — a consumerless schedule once left
 `cleanup-daily` silently accumulating.
 
-## None of them retries, and each for its own reason
+## Only the digest retries
 
-**`partitions-monthly`: one attempt at the archive.** A retry would re-run `detach` on a partition
-that is already detached and fail on *that* instead of on whatever actually broke, burying the real
-error. A tenant-month that fails is logged and the loop continues, and nothing it touched was
-dropped. See
-[`infrastructure/docs/reference/cold-storage.md`](../../../../packages/infrastructure/docs/reference/cold-storage.md).
-
-**`projection`: the schedule is the retry.** A failed run leaves the checkpoint where it was, and the
-next tick five minutes later resumes from exactly the same place. A retry inside the job buys nothing
-and stacks a second run on top of one that may still be holding a connection.
+Maintenance and analytics entries run once (`attempts: 1`): **the schedule is the retry.**
+`partitions-monthly` retrying would re-`detach` a detached partition and bury the real error — a failed
+tenant-month is logged, the loop continues, nothing it touched was dropped
+([cold-storage](../../../../packages/infrastructure/docs/reference/cold-storage.md)). A failed `projection`
+leaves its checkpoint, and the next tick resumes there. The digest has five attempts backing off from a
+minute — one failed fan-out would otherwise be every due tenant's digest.
 
 ## Why five minutes, and not five seconds
 
-The analytics queue is the one that is allowed to fall behind — nobody waits on a dashboard row — and
-a five-minute cadence keeps each run a handful of large inserts rather than a stream of small parts
-ClickHouse then has to merge.
-
-`projection` and `reconcile-daily` register **only when the container holds an `AnalyticsProjector`**.
-A schedule with no consumer accumulates silently; a schedule with a consumer but no store is worse,
-because it looks like it is working.
+Analytics may fall behind (nobody waits on a dashboard row), and five minutes keeps each run a few large
+inserts rather than parts ClickHouse must merge. Both analytics entries register **only with an
+`AnalyticsProjector`** — a consumer with no store looks like it works.
 
 ## `partitions-monthly` has a real deadline
 
-Migration `0000` created partitions through 2027-01. The day after the last one ends, **every insert
-to `activity_log` fails** — which under the analytics design is also every analytics write.
-
-**It covers every table on the allowlist, not `activity_log` by name.** `MaintenanceConsumer`
-iterates `PartitionedTable.ALL` and calls `ensureMonthlyPartitions` once per entry, emitting one
-`maintenance.partitions.ensured` line per table with the table as a *field*. So partitioning a new
-table is one entry in that list and no edit here — and the deadline above applies to each of them
-independently.
+Each tenant's months come from this job (and spare seeding); **the day a tenant's last month ends,
+every insert to its `activity_log` fails** — and with it every analytics write. It walks
+`PartitionedTable.MONTH_PARTITIONED`, not `activity_log` by name, logging
+`maintenance.partitions.ensured` per table and tenant as fields — a new table is one list entry, each with
+its own deadline.
 
 ## `outbox-drain` is the only sub-minute schedule here
 
-Every second, and that is the commit-to-delivery budget for anything riding the outbox. It is
-deliberately a poll rather than a push: the cheap improvement later is Postgres `LISTEN`/`NOTIFY`,
-and the trigger for reaching for it is written down as a measured commit-to-push budget under
-500 ms. A shorter interval is not the answer — it multiplies empty queries without moving the
-worst case.
-
-It registers under a fixed `jobId` like every other schedule here, and at `priority: 1` so the
-deliveries it creates cannot starve it.
+Every second — the outbox's commit-to-delivery budget. A poll on purpose: `LISTEN`/`NOTIFY` is the
+upgrade once a measured budget under 500 ms is needed; a shorter interval multiplies empty queries. Fixed
+`jobId`, `priority: 1` so its deliveries cannot starve it.
 
 ## Retention archives, then drops — and one table is guarded
 
-`partitions-monthly` ensures months ahead **and** retires months behind, per table. Retiring a
-month is not a drop: the tenant-month is detached, streamed to S3, recorded in `partition_archive`
-and verified, and only then dropped. `activity_log` at thirteen months, `notifications` at twelve,
-`outbox_event` at two; `messages` is domain data, kept until a retention row says otherwise and
-then only archived, with its reactions and files, never dropped (`26.4`). There is no separate
-archive job, because there is no month left that is dropped without one.
-
-`outbox_event` carries one guard: if the oldest *unpublished* row is older than the cutoff, the
-prune does nothing. A stuck event is never archived out from under the drain, which is the
-difference between retention and data loss.
-
-`activity_log` is the one table that also reaches ClickHouse, so the pass asks the projector where
-each tenant is before it stamps `partition_archive.projected_at`. A tenant the projection has not
-caught up with keeps a null stamp and gets an `analytics.projection.gap` line. The month is
-archived and dropped either way — a forgotten switch costs a known hole, never an unbounded table.
-See [`cold-storage.md`](../../../../packages/infrastructure/docs/reference/cold-storage.md).
+`partitions-monthly` also retires months behind: detach, stream to S3, record in `partition_archive`,
+verify, then drop — `activity_log` at thirteen months, `notifications` twelve, `outbox_event` two;
+`messages` (domain data) is archived with reactions and files only when a retention row says so, never
+dropped (`26.4`). **`outbox_event` is guarded:** an unpublished row older than the cutoff halts the prune.
+`activity_log` also reaches ClickHouse, so a tenant the projection lags keeps a null `projected_at` and
+logs `analytics.projection.gap` — archived and dropped anyway: a known hole, never an unbounded table. See [`cold-storage.md`](../../../../packages/infrastructure/docs/reference/cold-storage.md).
 
 ## A schedule fires once; the job it enqueues walks every node
 
-None of these registrations grew a shard dimension, and none should. A repeatable entry per node
-would be N entries to keep idempotent, N to deregister when a node is retired, and a fan-out that
-disagrees with the cluster the moment they drift. The schedule stays one entry, and the consumer
-loops — see [the consumers](consumers.md).
+No schedule has a shard dimension — per-node entries would need N-fold idempotency and deregistration
+and would drift from the cluster. One entry; the consumer loops nodes ([consumers](consumers.md)). So
+`runOnce()` at boot recovers the runway on **every** node.
 
-`partitions-monthly` is the one where that matters most: the deadline is physical. A node with no
-partition for next month rejects inserts on the first, and `runOnce()` at boot recovers the runway
-on **every** node because the job it enqueues does, not because the schedule knows how many there
-are.
-
-**The boot job keeps no failure** (`CR.17`). It has a fixed id, `partitions-boot`, so two replicas
-booting together enqueue one job. BullMQ ignores an `add` whose id is still in the failed set, and
-the job kept its last hundred failures — so one boot with Postgres down disabled the recovery at
-every later boot, silently. It is `removeOnFail: true` now: the failure is still a
-`queue.job.failed` line, and the next boot enqueues again.
+**The boot job keeps no failure** (`CR.17`): `partitions-boot`'s fixed id dedupes replicas, but BullMQ
+ignores an `add` whose id sits in the failed set — one boot with Postgres down once disabled recovery for
+good. `removeOnFail: true`; the failure still logs `queue.job.failed`.
 

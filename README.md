@@ -18,78 +18,25 @@ two Redis instances · S3 · stdout → Loki · ClickHouse behind a driver flag
 ![Redis](https://img.shields.io/badge/Redis-cache%20%2B%20queue-FF4438?style=flat-square&logo=redis&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 
-**[Quick start](#-quick-start)** ·
-**[Architecture](#-architecture)** ·
-**[Big kit vs lite](#-big-kit-vs-lite)** ·
-**[Documentation](#-documentation)**
-
 </div>
 
-<br>
-
 > [!NOTE]
-> This is the **big kit**. Its smaller sibling,
-> **[loadbearing lite](https://github.com/sami999khan999/loadbearing_mini)**, is the same code with
-> the scale stores removed and every seam kept, for projects that do not need them yet.
-
-<br>
+> This is the **big kit**. **[loadbearing lite](https://github.com/sami999khan999/loadbearing_mini)**
+> is the same code with the scale stores removed and every seam kept.
 
 ## ✦ Highlights
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
-**🧱 Layered, port-and-adapter packages**<br>
-Sixteen `@loadbearing/*` packages whose dependencies point one way. The domain names no
-framework and never logs, and CI fails the build if it starts to.
-
-</td>
-<td width="50%" valign="top">
-
-**🗄️ Built to shard from day one**<br>
-Every tenant table is partitioned by `organization_id`. Every repository declares where its
-tables live. Every connection is written for pgBouncer in transaction mode.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-**🔐 Auth, RBAC and entitlements**<br>
-Better Auth sessions, organizations with four system roles, per-plan entitlements and feature
-flags. All of them are enforced on the server.
-
-</td>
-<td valign="top">
-
-**📬 One send path for every message**<br>
-Mail is a BullMQ job, rendered and sent by the worker with retries, backoff and a rate
-limiter. It is never sent from inside a request.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-**🎨 Six themes, twelve colours**<br>
-Every colour is one of twelve tokens. `pnpm check:contrast` checks 154 pairings against WCAG AA
-in every theme and mode.
-
-</td>
-<td valign="top">
-
-**🛡️ 32 architecture assertions**<br>
-`pnpm check:architecture` catches what typecheck, lint and tests miss: framework leaks,
-missing tenant scope, stale doc paths, port drift and more.
-
-</td>
-</tr>
-</table>
-
-<br>
-
-## ✦ Stack
+- **🧱 Layered, port-and-adapter packages** — sixteen `@loadbearing/*` packages, dependencies one way;
+  the domain names no framework and never logs, enforced by CI.
+- **🗄️ Built to shard from day one** — every tenant table partitioned by `organization_id`, every
+  repository declaring its placement, every connection written for pgBouncer transaction mode.
+- **🔐 Auth, RBAC and entitlements** — Better Auth sessions, organizations with four system roles,
+  per-plan entitlements and feature flags, all enforced on the server.
+- **📬 One send path** — every mail is a BullMQ job the worker renders and sends with retries,
+  backoff and a rate limiter; never from inside a request.
+- **🎨 Six themes, twelve colours** — `pnpm check:contrast` checks 154 pairings against WCAG AA.
+- **🛡️ 32 architecture assertions** — `pnpm check:architecture` catches what typecheck, lint and tests
+  miss.
 
 | Layer | Choice |
 |---|---|
@@ -103,11 +50,9 @@ missing tenant scope, stale doc paths, port drift and more.
 | **Mail** | SMTP, caught by Mailpit in development |
 | **Copy** | `@loadbearing/content`, in English and Bangla |
 
-<br>
-
 ## ✦ Architecture
 
-A package may import from anything to its left, never from anything to its right.
+A package imports from its left, never its right:
 
 ```mermaid
 flowchart LR
@@ -116,18 +61,13 @@ flowchart LR
   api-server --> ui --> api-client --> query --> feature --> apps["apps/{web,worker,realtime}"]
 ```
 
-- **`packages/application`** is the domain. It names no framework and never logs.
-- **`packages/infrastructure`** is organized by vendor (`pg/`, `redis/`, `s3/`, `clickhouse/` …), so swapping a vendor means deleting one folder.
-- **`packages/composition`** is the DI root, and the only place a concrete adapter is named.
-- **`apps/*`** are thin, framework-shaped and deletable. Business logic never lands there.
-
-The full rules are in [`docs/ai/rules/layering.md`](docs/ai/rules/layering.md).
-
-<br>
+`application` is the domain (no framework, no logging); `infrastructure` is organised by vendor, so a
+swap deletes one folder; `composition` is the DI root, the only place an adapter is named; `apps/*` are
+thin and deletable. Full rules: [`docs/ai/rules/layering.md`](docs/ai/rules/layering.md).
 
 ## ✦ Quick start
 
-> **Requirements:** Node ≥ 24, pnpm ≥ 11.21, and Docker running.
+> **Requirements:** Node ≥ 24, pnpm ≥ 11.21, Docker running.
 
 ```bash
 pnpm install
@@ -137,111 +77,47 @@ pnpm db:migrate && pnpm db:seed
 pnpm dev                                                       # web + worker + realtime
 ```
 
-Then open **http://localhost:13000/sign-up**. The verification mail lands in Mailpit at
+Open **http://localhost:13000/sign-up**; the verification mail lands in Mailpit at
 **http://localhost:18025**.
 
-<details>
-<summary><b>Step by step, with the reasons</b></summary>
-
-<br>
-
-**1 · Install and configure.** Copy the template whole. Every required key has a working local
-value in it, and `apps/web/src/env.ts` parses the entire schema at module load, so a missing key is
-a boot failure rather than a 500 an hour later.
-
-Then set a real `AUTH_SECRET` in `.env` (`openssl rand -base64 32`). The template's `change-me` is
-too short for the schema on purpose, so a placeholder can never boot and reach production.
-
-**2 · Host ports, if any are taken.** Every published port is the well-known one with a `1` in
-front, so this stack does not fight another one on your machine. Inside the compose network nothing
-moved: `postgres:5432` is still `postgres:5432`.
-
-There is **one env file**, the `.env` at the root, and both halves of a port live in it. Change the
-`*_PORT` that compose publishes and the URL that dials it together:
-
-```bash
-POSTGRES_PORT=15432
-DATABASE_URL=postgres://ratchet:ratchet@localhost:15432/ratchet
-```
-
-`POSTGRES_PORT` `PGBOUNCER_PORT` `REDIS_CACHE_PORT` `REDIS_QUEUE_PORT` `S3_PORT`
-`MINIO_CONSOLE_PORT` `SMTP_PORT` `MAILPIT_UI_PORT` `LOKI_PORT` `ALLOY_PORT` `CLICKHOUSE_HTTP_PORT`
-`CLICKHOUSE_NATIVE_PORT` and `WEB_PORT` are the full set, and each one is documented in
-`.env.example`. `check:architecture` §27 fails the build if a `*_PORT` and the URL beside it
-disagree. Without it, that mistake shows up as a connection refused that names nothing.
-
-For the web app, change `WEB_PORT`. `apps/web/vite.config.ts` reads it, and `APP_BASE_URL`,
-`AUTH_URL` and `AUTH_TRUSTED_ORIGINS` must all name it. Better Auth signs cookies against `AUTH_URL`,
-and the CORS layer reads `AUTH_TRUSTED_ORIGINS`. §27 checks all three.
-
-**3 · Infrastructure.** Postgres + pgvector, two Redis instances (cache and queue), MinIO, Mailpit,
-and the Loki/Alloy log pipeline. ClickHouse is not started by default; `pnpm infra:up:analytics`
-adds it. See [docs/setup/11](docs/setup/11-local-infrastructure.md).
-
-```bash
-pnpm infra:up
-docker compose -f infra/docker-compose.yml --profile "*" ps   # wait until all are healthy
-```
-
-**4 · Database.**
-
-```bash
-pnpm db:migrate        # drizzle migrations, including Better Auth's own tables
-pnpm db:seed           # the `loadbearing` organization + the four system roles
-```
-
-`db:seed` prints `seed complete: <organizationId>`. It creates no user: the first person to sign up
-is enrolled into that organization. `pnpm auth:tables` creates nothing either. It prints what
-Better Auth's tables must look like in the pinned runtime, to diff against `auth.schema.ts` after
-an upgrade.
-
-**5 · Run.** `pnpm dev` builds the packages first, then runs web, worker and realtime in parallel.
-Each one loads the root `.env` itself. `pnpm dev:web` runs the web app alone.
-
-**6 · First sign-in.** Sign up at `/sign-up`. `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on, so
-the verification mail lands in Mailpit. Open it and click through.
-
-</details>
-
-<br>
-
-### Local URLs
+- **`.env`:** copy the template whole — `apps/web/src/env.ts` parses the full schema at load, so a
+  missing key fails boot. Set a real `AUTH_SECRET` (`openssl rand -base64 32`); `change-me` is too
+  short on purpose.
+- **Ports** are the well-known ones with a `1` in front, all in the root `.env` (the only env file).
+  Change a `*_PORT` and the URL dialling it together — `check:architecture` §27 fails if they
+  disagree. For the web app change `WEB_PORT`, and `APP_BASE_URL`, `AUTH_URL` and
+  `AUTH_TRUSTED_ORIGINS` with it.
+- **Infrastructure:** Postgres + pgvector, two Redis, MinIO, Mailpit, Loki/Alloy; ClickHouse via
+  `pnpm infra:up:analytics`. Wait for `docker compose -f infra/docker-compose.yml --profile "*" ps`
+  to show healthy. See [`docs/infra/`](docs/infra/index.md).
+- **`db:seed`** creates the `loadbearing` organization and four system roles, no user. `pnpm
+  auth:tables` prints Better Auth's expected schema for diffing after an upgrade.
 
 | Service | Address |
 |---|---|
 | 🌐 Web app | http://localhost:13000 |
-| 📬 Mailpit, which catches every outgoing mail | http://localhost:18025 |
+| 📬 Mailpit | http://localhost:18025 |
 | 🪣 MinIO console | http://localhost:19001 |
 | 📜 Loki API | http://localhost:13100 |
 | 💓 Readiness probe | http://localhost:13000/api/health |
 | 🗃️ Drizzle Studio | `pnpm db:studio` |
 
 > [!IMPORTANT]
-> Every message in this system is a job on `QueueName.MAIL`, rendered and sent by the worker, so
-> **nothing reaches Mailpit unless the worker is running**. `pnpm dev` starts it. The reasoning is
-> in [`mail-pipeline.md`](packages/composition/docs/reference/mail-pipeline.md).
-
-<br>
+> Every message is a job on `QueueName.MAIL`, so **nothing reaches Mailpit unless the worker runs**
+> (`pnpm dev` starts it). See [`mail-pipeline.md`](packages/composition/docs/reference/mail-pipeline.md).
 
 ## ✦ Accounts and organizations
 
-**No session is ever issued without a membership**, so `AUTH_ENROLMENT_MODE` decides how you get
-one:
+**No session is issued without a membership**; `AUTH_ENROLMENT_MODE` decides how you get one:
 
 | Mode | What happens on sign-up |
 |---|---|
-| `personal` *(default)* | You become `owner` of a new organization of your own, with the four system roles. It is the only mode that works against an empty database. |
-| `bootstrap` | Everyone joins the one organization `BOOTSTRAP_ORGANIZATION_SLUG` names. The first person in becomes `owner`. |
-| `invite` | An invitation is the only way in. This is the production posture. |
+| `personal` *(default)* | You become `owner` of a new organization with the four system roles. The only mode that works on an empty database. |
+| `bootstrap` | Everyone joins the organization `BOOTSTRAP_ORGANIZATION_SLUG` names; the first becomes `owner`. |
+| `invite` | Invitation only — the production posture. |
 
-In every mode, an address with a pending invitation joins the organization that invited it instead.
-
-**Try the permission gates.** `owner` holds `rbac.role.read`, so `/settings/roles` renders. Invite
-a second address from `/settings/members` and accept it in another browser profile. That `member`
-account is redirected to `/forbidden`, which shows the route guard and the use-case gate making the
-same decision.
-
-<br>
+A pending invitation always wins. To try the gates: invite a second address from `/settings/members`
+and accept in another browser profile — that `member` is sent to `/forbidden` from `/settings/roles`.
 
 ## ✦ Before committing
 
@@ -250,26 +126,16 @@ pnpm check:architecture   # needs pnpm build:packages + a web build, or two asse
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
-<details>
-<summary><b>When it does not come up</b></summary>
-
-<br>
-
 | Symptom | Cause |
 |---|---|
-| 500 on the first request, with a `ZodError` naming env keys | `.env` is missing or incomplete. Redo step 1. |
-| `/api/health` returns 503 | A container is not up, or a URL in `.env` names the wrong host port. |
-| `ECONNREFUSED` from `db:migrate` | Postgres is not healthy yet, or something else holds the port. |
-| Signed up, but the shell still renders signed-out | No membership. Under `bootstrap`, `BOOTSTRAP_ORGANIZATION_SLUG` is unset or `db:seed` never ran. Under `invite`, there is no invitation for the address. |
-
-</details>
-
-<br>
+| 500 on the first request, `ZodError` naming env keys | `.env` missing or incomplete |
+| `/api/health` returns 503 | A container is down, or a `.env` URL names the wrong host port |
+| `ECONNREFUSED` from `db:migrate` | Postgres not healthy yet, or the port is taken |
+| Signed up, still signed-out | No membership — `bootstrap` without seed/slug, or `invite` with no invitation |
 
 ## ✦ Big kit vs lite
 
-Both kits share the same packages, the same `@loadbearing/*` scope and the same rules. The
-difference is which stores are running.
+Same packages, scope and rules; different stores running.
 
 | | **loadbearing** *(this repo)* | **[loadbearing lite](https://github.com/sami999khan999/loadbearing_mini)** |
 |---|---|---|
@@ -282,26 +148,21 @@ difference is which stores are running.
 | Seams | ✅ all built | ✅ all built |
 | Host ports | `1xxxx` | `2xxxx` |
 
-**Two stores are wired but off.** ClickHouse (`AnalyticsReader`, `AnalyticsProjector`) and Loki's
-read side (`LogReader`) have working adapters, a projection consumer and a nightly reconciliation.
-The container builds none of them unless `CLICKHOUSE_URL` or `LOKI_URL` is set. *Building the seam*
-and *starting the store* are separate decisions, and only the second costs anything to get wrong.
-See [reference/clickhouse](packages/infrastructure/docs/reference/clickhouse.md).
-
-<br>
+**Two stores are wired but off:** ClickHouse (`AnalyticsProjector`, its consumer and nightly
+reconciliation) and Loki's read side (`LogReader`) build only when `CLICKHOUSE_URL` or `LOKI_URL` is
+set — building the seam and starting the store are separate decisions
+([reference/clickhouse](packages/infrastructure/docs/reference/clickhouse.md)).
 
 ## ✦ Documentation
 
 | Where | What it is |
 |---|---|
-| **[`AGENTS.md`](AGENTS.md)** | What a coding agent reads first: the four rules that cost the most when broken, then a pointer to the task router. `CLAUDE.md` imports it. |
-| **[`docs/ai/`](docs/ai/index.md)** | Everything written for agents. The index is a task router; [`rules/`](docs/ai/rules/index.md) is the rulebook (fourteen files, ~11,900 tokens), and [`skills/`](docs/ai/skills/add-slice.md) holds the run books. |
-| **[`docs/setup/`](docs/setup/00-README.md)** | The build order, walked once. Thirty-one documents from an empty directory to a running app. |
-| **[`docs/opinions/`](docs/opinions/index.md)** | The reference: what to call a thing, where to put it, and which store owns it. |
-| **`packages/*/docs/`** | One reference set per package: what it is for, and why each export is shaped the way it is. |
-| **[`docs/infra/`](docs/infra/index.md)** | The running stack: what each container is for, how the log pipeline works, and what to check when it is wrong. |
-
-<br>
+| **[`AGENTS.md`](AGENTS.md)** | What a coding agent reads first; `CLAUDE.md` imports it. |
+| **[`docs/ai/`](docs/ai/index.md)** | For agents: a task router, the [rulebook](docs/ai/rules/index.md) (fourteen files, ~8,700 tokens) and [run books](docs/ai/skills/add-slice.md). |
+| **[`docs/opinions/`](docs/opinions/index.md)** | The reference: what to call a thing, where it goes, which store owns it. |
+| **`packages/*/docs/`** | Per package: what it is for, and why each export is shaped as it is. |
+| **[`docs/infra/`](docs/infra/index.md)** | The running stack and what to check when it is wrong. |
+| **[`docs/explained/`](docs/explained/index.md)** | A plain-language guide for newcomers. |
 
 <div align="center">
 <sub>Built to carry weight. ⚙️</sub>

@@ -24,18 +24,18 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 
 | File | What it does |
 |---|---|
-| `package.json` | The package manifest: its name, its build, test and type-check scripts, and its dependencies. Versions come from the workspace catalog. |
-| `tsconfig.json` | TypeScript settings. Extends a shared preset from `tooling/tsconfig` and type-checks the tests too. |
-| `tsup.config.ts` | Build settings: bundles `src/` into `dist/` as ES modules with type declarations. |
-| `vitest.config.ts` | Test runner settings. Resolves sibling packages to their source, so tests never run against a stale build. |
+| `package.json` | Package manifest. |
+| `tsconfig.json` | TypeScript settings. |
+| `tsup.config.ts` | Build settings. |
+| `vitest.config.ts` | Test settings. |
 | `vitest.setup.ts` | Runs before the tests: cleans up rendered components between tests. |
 
 ### `packages/feature/src/`
 
 | File | What it does |
 |---|---|
-| `import.ts` | Every import from outside this package, written once and re-exported, so the rest of `src/` imports from one place. |
-| `index.ts` | The package's public entry point. Re-exports what other packages may use, and contains no logic. |
+| `import.ts` | Outside-import surface. |
+| `index.ts` | Public entry point. |
 
 ### `packages/feature/src/account/`
 
@@ -44,7 +44,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | `active-session.list.tsx` | `ActiveSessionList`: the "where you are signed in" list, with a button to sign out each other device. |
 | `change-email.form.tsx` | `ChangeEmailForm`: asks for a new email address; a confirmation link goes to the current address first. |
 | `change-password.form.tsx` | `ChangePasswordForm`: changes your password and signs out your other devices. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `linked-account.list.tsx` | `LinkedAccountList`: the ways you can sign in (password, Google), with link and unlink. You cannot unlink your last one. |
 | `profile.form.tsx` | `ProfileForm`: edits your display name. |
 | `two-factor.panel.tsx` | `TwoFactorPanel`: when two-factor is on: turn it off, or replace your backup codes (both need your password). |
@@ -55,7 +55,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `activity-trend.panel.tsx` | `ActivityTrendPanel`: the activity screen: counts per day and per action for the last 7 or 30 days, as tables, or a "not configured" note. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 
 ### `packages/feature/src/apikey/`
 
@@ -63,7 +63,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 |---|---|
 | `api-key.list.tsx` | `ApiKeyList`: the API key list with status and a revoke button that asks for confirmation. |
 | `create-api-key.form.tsx` | `CreateApiKeyForm`: creates a key with a name, permissions you hold and an optional expiry, then shows the secret once until dismissed. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `use-api-key-failure.ts` | `useApiKeyFailure`: turns an API key error into the right sentence (not allowed at all, a permission you do not hold, a bad expiry). |
 
 ### `packages/feature/src/auth/`
@@ -71,7 +71,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `forgot-password.form.tsx` | `ForgotPasswordForm`: asks for an email and always shows the same confirmation, so it never reveals whether an account exists. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `password-pair.tsx` | `PasswordPair`: the "password" and "confirm password" fields with their rules, shared by sign-up, reset and change. |
 | `reset-password.form.tsx` | `ResetPasswordForm`: sets a new password using the token from the reset email. |
 | `session.context.tsx` | `SessionProvider` and hooks (`useSession`, `useCapabilities`, `useIsPlatformOrganization`): the signed-in person, their organizations, the active one, their permissions and their flags, available to every component. |
@@ -87,7 +87,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `dashboard-zone.tsx` | `DashboardZone`: the dashboard's card area. Shows only the cards the person may see and has not hidden; denied cards are never even mounted. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 
 ### `packages/feature/src/doc/`
 
@@ -107,7 +107,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | `doc-space-switcher.button.tsx` | `DocSpaceSwitcherButton`: the switcher between doc spaces at the top of the sidebar, hidden when there is only one. |
 | `doc-space.form.tsx` | `DocSpaceForm`: create or edit a space: title, slug, description, icon, audience, theme, GitHub link, access link, and delete. |
 | `doc-space.list.tsx` | `DocSpaceList`: a grid of cards, one per space, shown before a space is chosen. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 
 ### `packages/feature/src/document/`
 
@@ -115,27 +115,27 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 |---|---|
 | `document.search.tsx` | `DocumentSearch`: the AI document search box and its results. |
 | `index-document.form.tsx` | `IndexDocumentForm`: paste a document's text to queue it for indexing. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 
 ### `packages/feature/src/error/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `use-error-message.ts` | `useErrorMessage`: turns whatever an API call threw into the right sentence in the user's language: what is wrong with each field when the server named them, otherwise the sentence for the error's code. |
 
 ### `packages/feature/src/i18n/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `message.context.tsx` | `MessageProvider`, `useTranslator` and `useMessages`: makes translated text available to components and loads more namespaces as pages need them. |
 
 ### `packages/feature/src/member/`
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `invitation-list.tsx` | `InvitationList`: pending invitations with resend and revoke. |
 | `invite-member.form.tsx` | `InviteMemberForm`: invite by email into a role, offering only roles you are allowed to hand out. |
 | `member-access.panel.tsx` | `MemberAccessPanel`: one member's access in one place: their exceptions, a form to add one, and their effective permissions with where each came from. |
@@ -148,7 +148,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `conversation.list.tsx` | `ConversationList`: your conversations with names and unread badges. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `message-composer.form.tsx` | `MessageComposer`: the message box. Enter sends, Shift+Enter adds a line, and it sends typing signals. |
 | `message.list.tsx` | `MessageList`: a conversation's messages, oldest at the top. |
 | `typing.notice.tsx` | `TypingNotice`: "Ada is typing…". |
@@ -157,7 +157,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 
 | File | What it does |
 |---|---|
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `module-nav.tsx` | `ModuleNav`: the main menu: the menu entries from content, shown only for modules the person may see. |
 
 ### `packages/feature/src/notification/`
@@ -165,7 +165,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `archived-notification.list.tsx` | `ArchivedNotificationList`: notifications from an archived month, read from cold storage. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `notification-bell.button.tsx` | `NotificationBell`: the bell in the header with an unread badge ("99+" past 99) that opens a peek of unread items. |
 | `notification-peek.list.tsx` | `NotificationPeek`: the newest unread notifications inside the bell's popup, with a link to the inbox. |
 | `notification-preference.form.tsx` | `NotificationPreferenceForm`: the preferences grid: for each category and channel, instant, daily digest or off. |
@@ -176,7 +176,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `create-organization.form.tsx` | `CreateOrganizationForm`: founds a new organization and switches into it. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `invitation-accept.tsx` | `InvitationAccept`: the invitation landing page: who invited you to what, and sign in, sign up or accept. |
 | `organization-switcher.tsx` | `OrganizationSwitcher`: the dropdown that switches your active organization or starts a new one. |
 
@@ -187,7 +187,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | `account.panel.tsx` | `AccountPanel`: the super admin's account screen: look a person up by email, see their memberships, suspend or reinstate them, and add or clear platform denies. |
 | `delete-tenant.panel.tsx` | `DeleteTenantPanel`: delete an organization by typing its slug to confirm. |
 | `flag.list.tsx` | `FlagList`: every feature flag with owner and expiry, its global switch and per-organization targets. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `module-switch.panel.tsx` | `ModuleSwitchPanel`: the emergency module kill switches, each needing a reason to turn off. |
 | `organization-entitlement.panel.tsx` | `OrganizationEntitlementPanel`: one organization's plan, its adjustments, and how much of each role the plan lets through. |
 | `plan.form.tsx` | `PlanForm`: create or edit a plan by ticking permissions, with dependencies ticked automatically. |
@@ -213,7 +213,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | `capabilities-from-wire.ts` | `capabilitiesFromWire`: turns permission strings from the API into a `CapabilitySet`, ignoring keys the catalog no longer knows. |
 | `create-role.form.tsx` | `CreateRoleForm`: creates an empty role by name and description. |
 | `effective-permissions.inspector.tsx` | `EffectivePermissionsInspector`: what one person can do, and why, for each permission (platform deny, organization deny, plan, exception, role). |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `permission-matrix.tsx` | `PermissionMatrix`: a grid of permissions (rows) by roles or people (columns), with ticks you can toggle where allowed. |
 | `permission-override.form.tsx` | `PermissionOverrideForm`: give or take away one permission from one person, with a reason and an end date for grants. |
 | `permission-override.list.tsx` | `PermissionOverrideList`: one person's exceptions. A platform deny shows a lock and cannot be cleared here. |
@@ -226,7 +226,7 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `hidden-widget.list.tsx` | `HiddenWidgetList`: the tray of hidden dashboard cards: yours come back with a click, the organization's are locked. |
-| `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
+| `index.ts` | Folder barrel. |
 | `use-widget-preferences.ts` | `useWidgetPreferences`: loads hidden-card preferences, only while the rollout flag is on. |
 | `use-widget-visibility.ts` | `useWidgetVisibility`: whether a card shows for this person (flag, then permission, then preferences). |
 | `widget-default.form.tsx` | `WidgetDefaultForm`: an admin hides or restores cards for everyone. |
@@ -357,11 +357,11 @@ It knows nothing about routing: the app passes in links and callbacks, so the sa
 | File | What it does |
 |---|---|
 | `index.md` | Components that fetch and mutate — the auth screens, the message provider, the session guard. Mountable under any routing shell, because navigation arrives as a prop. |
-| `meta.json` | Sidebar title, description and page order for this docs folder. |
+| `meta.json` | Sidebar order. |
 
 ### `packages/feature/docs/reference/`
 
 | File | What it does |
 |---|---|
 | `message-narrowing.md` | Why useMessages takes the namespace as its only argument, why the two-argument shape that looks equivalent constrains nothing, and why a missing key renders as itself. |
-| `meta.json` | Sidebar title, description and page order for this docs folder. |
+| `meta.json` | Sidebar order. |

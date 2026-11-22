@@ -5,14 +5,10 @@ description: Every block of Loki's config — single-binary mode, MinIO-backed s
 
 # `loki.config.yml`
 
-The log store. Alloy pushes to it, MinIO holds its chunks, and everything that reads goes through its
-HTTP query API — `curl`, the smoke check, and
-[`LokiLogReader`](../../../packages/infrastructure/docs/reference/loki.md), which is the seam the
-super-admin dashboard will read through.
-
-**Nothing in this repository pushes to it.** `JsonLogger` writes to stdout and has never heard of
-Loki; Alloy tails stdout and pushes. That asymmetry is why swapping the log platform is a config
-change — the write path has no dependency to swap.
+The log store. Alloy pushes, MinIO holds chunks, and every reader uses the HTTP query API — `curl`,
+the smoke check, and [`LokiLogReader`](../../../packages/infrastructure/docs/reference/loki.md), the
+seam for the super-admin dashboard. **Nothing in this repository pushes to it:** `JsonLogger` writes
+stdout and Alloy ships it, so a log-platform swap is config — the write path has no dependency.
 
 | | |
 | --- | --- |
@@ -27,14 +23,9 @@ change — the write path has no dependency to swap.
 
 ## `auth_enabled: false`
 
-Loki is multi-tenant by design and identifies tenants with an `X-Scope-OrgID` header. Disabling auth
-does not remove tenancy — it hard-codes every request to the tenant `fake`, which is why objects
-appear under `fake/` in the bucket.
-
-For a single-tenant local stack that is correct. **Turning it on means every client must send the
-header**, including Alloy's `loki.write` and every query client.
-
----
+Loki is multi-tenant via an `X-Scope-OrgID` header. Disabling auth hard-codes the tenant `fake` (hence
+`fake/` in the bucket) — right for a single-tenant stack. **Enabling it means every client sends the
+header**, Alloy's `loki.write` and every query client included.
 
 ## `server`
 
@@ -44,11 +35,8 @@ server:
   log_level: warn
 ```
 
-`warn` rather than the default `info`, and it is a deliberate loop-breaker: Alloy collects Loki's own
-stdout, so a chatty Loki generates lines that are shipped back to Loki. At `info` that is a
-meaningful fraction of a quiet stack's log volume.
-
----
+`warn`, not `info`, breaks a loop: Alloy ships Loki's own stdout back to Loki, which at `info` is a
+real fraction of a quiet stack's volume.
 
 ## `common`
 
@@ -62,21 +50,13 @@ common:
       store: inmemory
 ```
 
-This block is what makes Loki run as a **single binary** rather than a distributed system. Loki is
-internally a set of components — distributor, ingester, querier, compactor — that in a cluster
-discover each other through a ring backed by Consul or etcd.
+This makes Loki a **single binary**. Its components (distributor, ingester, querier, compactor)
+normally find each other through a Consul or etcd ring; `store: inmemory` with
+`replication_factor: 1` is a one-member ring in one process, registered at `127.0.0.1`.
+`path_prefix: /loki` holds the WAL, index cache and compactor directory — the `lokidata` mount.
 
-`store: inmemory` with `replication_factor: 1` means the ring exists but has one member, so all
-components run in one process and coordinate through memory. `instance_addr: 127.0.0.1` is how that
-member registers itself.
-
-`path_prefix: /loki` is the container path everything local hangs off — the WAL, the index cache, the
-compactor's working directory. It is the mount point of the `lokidata` volume.
-
-> Scaling past one instance means replacing this block, not editing it. Grafana Cloud runs the same
-> Loki with a real ring, which is why the escape hatch is a config change rather than a migration.
-
----
+> Scaling past one instance replaces this block. Grafana Cloud runs the same Loki with a real ring, so
+> the escape hatch is a config change, not a migration.
 
 ## `common.storage.s3` — chunks in MinIO
 
@@ -91,19 +71,14 @@ compactor's working directory. It is the mount point of the `lokidata` volume.
       insecure: true
 ```
 
-**`endpoint: minio:9000`** is the service name on the bridge network — see
-[minio](minio.md). Not `localhost`, which would be Loki's own loopback.
+- **`endpoint: minio:9000`** — the bridge-network service name ([minio](minio.md)); `localhost` would
+  be Loki's own loopback.
+- **`s3forcepathstyle: true`** — as `S3_FORCE_PATH_STYLE`: MinIO uses `endpoint/bucket/key`, AWS
+  `bucket.endpoint/key`. Both flip for real S3.
+- **`insecure: true`** — plain HTTP; removed against real S3.
 
-**`s3forcepathstyle: true`** is the same distinction as `S3_FORCE_PATH_STYLE` in `.env.example`:
-MinIO addresses buckets as `endpoint/bucket/key`, AWS as `bucket.endpoint/key`. Both values flip for
-real S3.
-
-**`insecure: true`** means plain HTTP. MinIO here has no TLS; against real S3 this is removed.
-
-Pointing Loki at object storage rather than a local volume is what makes retention a config line, and
-what makes the local topology match production where the same block names S3 and a real key.
-
----
+Object storage rather than a volume is what makes retention a config line and keeps the local topology
+matching production.
 
 ## `schema_config`
 
@@ -119,16 +94,10 @@ schema_config:
         period: 24h
 ```
 
-**A list, not an object, and that is structural.** Loki's storage format has changed across versions,
-and rather than migrate old data it keeps a *dated list of schemas*: data written after `from` uses
-that entry, older data keeps whatever was current when it was written. Changing the format means
-appending an entry with a future `from`, never editing this one.
-
-`store: tsdb` with `schema: v13` is the current pair — TSDB is the index format Loki 3.x wants, and
-v13 is the schema version that goes with it. `period: 24h` means one index table per day, which is
-also the granularity the compactor works at.
-
----
+**A list, structurally:** rather than migrate data, Loki keeps dated schemas — data after `from` uses
+that entry. Changing format means appending an entry with a future `from`, never editing this one.
+`tsdb` + `v13` is Loki 3.x's current pair; `period: 24h` is one index table a day, the compactor's
+granularity too.
 
 ## `limits_config`
 
@@ -142,32 +111,16 @@ limits_config:
   discover_log_levels: false
 ```
 
-**`retention_period: 720h`** is the thirty-day policy, and it is the entire argument for a log
-platform over a log table. No migration, no partition, no cleanup job.
-
-**`reject_old_samples`** refuses lines older than a week. Without it, a misconfigured agent replaying
-an old file writes into arbitrary past index periods, which is expensive and confusing.
-
-**`max_label_names_per_series: 8`** is a backstop, not the rule. The rule is the four-label pipeline
-in [alloy](alloy.md); this makes a mistake fail loudly at ingest rather than quietly multiplying
-streams.
-
-### The two that stop Loki inventing labels
-
-```yaml
-  discover_service_name: []
-  discover_log_levels: false
-```
-
-**Loki 3.x adds labels on its own unless told not to.** By default it derives a `service_name` from a
-list of candidate fields, and detects a `detected_level` from the line. Left at their defaults, the
-label set the Alloy pipeline carefully limits to four arrives as six.
-
-This was found by querying the running system, not by reading the config — nothing in
-`alloy.config.alloy` mentions `service_name`, so a config review cannot find it. It is one of the
-three reasons the gate checks live labels rather than the file.
-
----
+- **`retention_period: 720h`** — thirty days, the whole case for a log platform over a log table: no
+  migration, partition or cleanup job.
+- **`reject_old_samples`** — refuses lines older than a week, so a misconfigured agent replaying an old
+  file cannot write into arbitrary past index periods.
+- **`max_label_names_per_series: 8`** — a backstop that makes a mistake fail loudly at ingest; the rule
+  is the four-label pipeline in [alloy](alloy.md).
+- **`discover_service_name: []` and `discover_log_levels: false` stop Loki inventing labels.** By
+  default Loki 3.x derives `service_name` and `detected_level`, turning four labels into six. Found by
+  querying the running system — nothing in `alloy.config.alloy` mentions them — which is why the gate
+  checks live labels rather than the file.
 
 ## `compactor`
 
@@ -178,12 +131,8 @@ compactor:
   retention_enabled: true
 ```
 
-**`retention_enabled: true` is what actually enforces `retention_period`.** Without it the setting is
-advisory — Loki accepts the limit and nothing ever deletes. The compactor is the component that
-merges index files and applies deletion, and it must be explicitly told retention is its job.
-
-`delete_request_store: s3` puts pending deletion requests in the object store, so they survive a
-restart.
+**`retention_enabled: true` is what enforces `retention_period`** — without it the limit is advisory
+and nothing deletes. `delete_request_store: s3` keeps pending deletions across restarts.
 
 ---
 
@@ -196,14 +145,10 @@ restart.
 | out | you | `curl localhost:13100/loki/api/v1/...` |
 | storage | `minio` | chunks and index to bucket `loki` |
 
-`LokiLogReader` is built only when `LOKI_URL` is set, and its absence changes nothing about what is
-written. It is also deliberately **not** part of `Container.healthy()`: Loki being down loses
-diagnostics and nothing else, and failing a readiness probe over it takes the application down in
-order to protect its logs.
-
-Its `LogQuery` type offers the four labels and a substring filter, and nothing else — so a caller
-cannot express a query that would need a high-cardinality label. The cardinality rule below is
-enforced by the shape of the port rather than by convention.
+`LokiLogReader` is built only when `LOKI_URL` is set and changes nothing written. It is **not** in
+`Container.healthy()`: Loki down loses diagnostics only, and failing readiness over it would take the
+app down to protect its logs. Its `LogQuery` offers the four labels and a substring filter, so a
+high-cardinality query cannot be expressed.
 
 ---
 
@@ -219,13 +164,10 @@ curl -s -G http://localhost:13100/loki/api/v1/series \
   --data-urlencode 'match[]={app=~".+"}'
 ```
 
-**The global `/labels` endpoint includes streams from before any config change** and will show ghosts
-long after the cause is fixed. Always scope to a fresh window when checking cardinality.
+**The global `/labels` endpoint includes old streams** and shows ghosts after a fix; always scope to a
+fresh window. App-side: `pnpm --filter @loadbearing/infrastructure run smoke` with `LOKI_URL` set pings
+`/ready` and runs a real `query_range` over the last hour, asserting nothing about particular lines
+(that would be flaky, not a wiring check).
 
-The application-side check is `pnpm --filter @loadbearing/infrastructure run smoke` with `LOKI_URL`
-set: it pings `/ready` and runs a real `query_range` over the last hour, printing what came back. It
-deliberately asserts nothing about a particular line — that would make the check depend on something
-having been logged recently, which is a flaky test rather than a wiring check.
-
-> Loki takes longer than everything else to report healthy on a cold start, because it waits for
-> `minio-init` to create its bucket. Twenty retries at ten seconds is generous on purpose.
+> Loki is the slowest to report healthy on a cold start, waiting for `minio-init` to make its bucket —
+> hence twenty retries at ten seconds.

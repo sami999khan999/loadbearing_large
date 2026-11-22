@@ -5,8 +5,7 @@ description: The S3 stand-in, its two unrelated consumers, and the one-shot cont
 
 # `minio`
 
-An S3-compatible object store, running locally so the S3 code path is exercised in development rather
-than first executed on the day you deploy.
+An S3-compatible store, so the S3 code path runs in development, not first on deploy day.
 
 | | |
 | --- | --- |
@@ -21,38 +20,29 @@ than first executed on the day you deploy.
 
 ## Why MinIO rather than a filesystem adapter
 
-The AWS SDK talks to MinIO unchanged. A filesystem `StorageGateway` would mean the S3 path — presign
-expiry, path-style addressing, multipart, error shapes — is first executed in production.
-
-The one difference is addressing, and it is a config value rather than a code branch:
+The AWS SDK talks to MinIO unchanged; a filesystem `StorageGateway` would first run presign expiry,
+addressing, multipart and error shapes in production. The one difference, addressing, is config:
 
 ```ini
 S3_FORCE_PATH_STYLE=true    # MinIO: endpoint/bucket/key
 S3_FORCE_PATH_STYLE=false   # AWS:   bucket.endpoint/key
 ```
 
-That switch has been in `.env.example` since [02](../../setup/02-repo-skeleton.md) precisely
-so the production difference is one line in an environment file.
+It has been in `.env.example` from the start, so production differs by one line.
 
 ---
 
 ## Two unrelated consumers
-
-This is the part worth knowing, because the two have nothing to do with each other and share only a
-server.
 
 | Bucket | Written by | Contains | Derived? |
 |---|---|---|---|
 | `ratchet` | `S3StorageGateway` | user uploads | **no** — a second source of truth |
 | `loki` | Loki | log chunks and the TSDB index | no — but only 30 days of it |
 
-**`ratchet` holds a genuine second source of truth.** Postgres holds the metadata row and the object
-key; MinIO holds the bytes. That is why deleting a resource is two operations, and why the two can
-disagree if one half fails ([12](../../setup/12-application-package.md)).
-
-**`loki` is Loki's storage backend**, configured in [loki.config.yml](loki.md). Pointing Loki at
-object storage rather than a local volume is what makes retention a config line and what makes the
-local topology match production, where the same setting names S3.
+They share a server and nothing else. **`ratchet` is a real second source of truth** — Postgres has
+the metadata row and key, MinIO the bytes — so deleting a resource is two operations that can
+disagree if one fails. **`loki` is Loki's backend** ([loki.config.yml](loki.md)), which makes retention
+a config line and matches production, where the same setting names S3.
 
 > Keys under `ratchet` follow `<subject>/<yyyy>/<mm>/<uuid>.<ext>` — date-partitioned because
 > lifecycle rules and cost reporting both work on prefixes, and a UUID rather than the original
@@ -79,27 +69,20 @@ minio-init:
     "
 ```
 
-It runs, creates both buckets, and exits — so **`exited (0)` in `docker compose ps` is success**, not
-a failure. It has no `restart:` policy and no healthcheck, because a container meant to stop cannot
-be unhealthy.
+It creates both buckets and exits — **`exited (0)` is success**; no restart policy or healthcheck,
+since it is meant to stop.
 
-**`mc alias set local http://minio:9000`** uses the service name, because this container is on the
-bridge network. `localhost` here would be `minio-init`'s own loopback.
+- **`mc alias set local http://minio:9000`** — the service name; `localhost` is its own loopback.
+- **`--ignore-existing`** — idempotent, safe on every `up`.
+- **`mc anonymous set none`** — both buckets private. Files are served via presigned URLs from
+  `S3StorageGateway`; a public bucket exposes any upload whose key is guessed.
 
-**`--ignore-existing`** makes it idempotent, so it is safe on every `up`.
-
-**`mc anonymous set none`** makes both buckets private. That is the correct default: files are served
-through presigned URLs from `S3StorageGateway`, never by public path. A public bucket would make
-every uploaded document readable by anyone who guessed a key.
-
-Loki depends on this container *completing*, not merely starting:
+Loki depends on it *completing*, or it starts before its bucket exists and fails on first write:
 
 ```yaml
 loki:
   depends_on: { minio-init: { condition: service_completed_successfully } }
 ```
-
-Without that, Loki starts before its bucket exists and fails on the first write.
 
 ---
 
@@ -115,23 +98,14 @@ $C exec minio sh -c "mc alias set l http://localhost:19000 ratchet ratchetsecret
 $C exec minio sh -c "mc alias set l http://localhost:19000 ratchet ratchetsecret >/dev/null && mc ls --recursive l/loki | head"
 ```
 
-`loki_cluster_seed.json` and an `index/` prefix appear as soon as Loki starts. **Chunks take longer**:
-Loki buffers them in its write-ahead log and flushes on a timer, so a `fake/` prefix — the tenant name
-used when `auth_enabled: false` — only shows up after the first flush, not after the first log line.
+`loki_cluster_seed.json` and `index/` appear when Loki starts. **Chunks take longer** — buffered in the
+WAL and flushed on a timer — so `fake/` (the tenant under `auth_enabled: false`) appears after the
+first flush; `index/` without `fake/` after a few minutes is normal. An empty bucket with a healthy Loki
+means nothing is shipped — check [alloy](alloy.md). The console at `http://localhost:19001` (same
+credentials) is the fastest way to inspect an upload.
 
-An empty `loki` bucket with a healthy Loki means Loki is running but nothing has been shipped to it —
-check [alloy](alloy.md). An `index/` but no `fake/` after a few minutes of traffic is normal.
-
-The console at `http://localhost:19001` signs in with the same credentials and is the fastest way to
-look at an uploaded object.
-
-> **MinIO stopped publishing community images in October 2025**, and pulled the existing ones from
-> Docker Hub and Quay together. `minio/minio` and `minio/mc` both stopped resolving, which took the
-> CI stack down with them — the pull failure is a `403` naming a repository that no longer exists,
-> not a rate limit, so waiting does not fix it.
->
-> The server is now a community rebuild of `RELEASE.2025-10-15T17-29-55Z`, the last upstream release,
-> pinned rather than floating: there will be no further releases to track, so a moving tag buys
-> nothing and costs the next person an unexplained change. `mc` comes from Bitnami's archive, which
-> is frozen for the same reason. Both are stand-ins for a dev dependency — an S3 that is not AWS —
-> and neither is something a deployment runs.
+> **MinIO stopped publishing community images in October 2025** and pulled existing ones from Docker
+> Hub and Quay, so `minio/minio` and `minio/mc` stopped resolving (a `403`, not a rate limit — waiting
+> does not help) and took CI down. The server is now a community rebuild of
+> `RELEASE.2025-10-15T17-29-55Z`, the last upstream release, pinned since nothing newer will come; `mc`
+> is from Bitnami's frozen archive. Both are dev stand-ins, never run by a deployment.

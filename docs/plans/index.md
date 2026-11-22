@@ -5,13 +5,12 @@ description: What is left to do in the big kit, and how to pick the work up. Eve
 
 # Plans
 
-Two live files. Everything finished, every plan and every closed backlog entry, is in
-[`archive/`](archive/index.md).
+Two live files. Finished work is in git history, not here.
 
 | File | What it holds |
 |---|---|
 | [`BACKLOG.md`](BACKLOG.md) | **The only open ledger.** Every item not done, by section and ID, each pointing at the archived body. |
 | [`HANDOFF.md`](HANDOFF.md) | How to pick the work up on any machine: setup, test accounts, how each phase was checked, and the traps that cost time. |
 
-A new plan is written here while it is built, and moves to `archive/` with a row in its index
-once its last box is ticked; what it leaves open becomes a backlog entry.
+A new plan is written here while it is built and deleted once its last box is ticked; what it
+leaves open becomes a backlog entry.

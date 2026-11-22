@@ -1,20 +1,13 @@
 ---
 title: "@loadbearing/application"
-description: Principal, Authorizer, and the sixteen abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
+description: Principal, Authorizer, and the abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
 ---
 
 # `@loadbearing/application`
 
-If `ReactivateTaskUseCase` lives inside a TanStack Start server function, swapping the transport
-means rewriting business logic. If it lives here, the transport is a hundred lines of adapter.
-
-That is the whole argument, and it has a mechanical test:
-
-```bash
-grep -rE "@orpc|@tanstack|@nestjs|drizzle|ioredis|aws-sdk|better-auth" packages/application/src
-```
-
-It returns nothing, and `check-architecture.mjs` §1 asserts it in CI.
+A use-case inside a server function makes a transport swap a business-logic rewrite; here, the transport
+is an adapter. `grep -rE "@orpc|@tanstack|@nestjs|drizzle|ioredis|aws-sdk|better-auth"
+packages/application/src` returns nothing (§1).
 
 | | |
 | --- | --- |
@@ -27,87 +20,27 @@ It returns nothing, and `check-architecture.mjs` §1 asserts it in CI.
 
 ```
 packages/application/
-├── vitest.config.ts
 ├── src/
 │   ├── index.ts
 │   ├── import.ts                 ← ServerOnly, ForbiddenError, ids, CapabilitySet
-│   ├── primitive/
-│   │   ├── index.ts
-│   │   ├── principal.ts          → Principal, PrincipalKind
-│   │   ├── queue-name.ts         → QueueName
-│   │   ├── partitioned-table.ts  → PartitionedTable, PartitionedTableName
-│   │   └── authorizer.ts         → Authorizer
-│   ├── port/                     ← abstract classes only, zero implementations
-│   │   ├── index.ts
-│   │   ├── activity.logger.ts    → ActivityLogger
-│   │   ├── partition-archive.gateway.ts → PartitionArchiveGateway, ArchivedPartition
-│   │   ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
-│   │   │                                 ProjectionCheckpoint, DailyCount
-│   │   ├── analytics.projector.ts → AnalyticsProjector
-│   │   ├── cache.store.ts        → CacheStore
-│   │   ├── capability.invalidator.ts → CapabilityInvalidator
-│   │   ├── email.sender.ts       → EmailSender, EmailMessage, EmailReceipt
-│   │   ├── embedding.provider.ts → EmbeddingProvider
-│   │   ├── log.reader.ts         → LogReader, LogQuery, LogEntry
-│   │   ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
-│   │   ├── queue.publisher.ts    → QueuePublisher, JobOptions
-│   │   ├── session.resolver.ts   → SessionResolver, ResolvedSession, RequestHeaders
-│   │   ├── storage.gateway.ts    → StorageGateway, StoredObject
-│   │   ├── unit-of-work.ts       → UnitOfWork
-│   │   └── vector.store.ts       → VectorStore, DocumentChunk, StaleChunk, SearchHit
-│   ├── ai/
-│   │   ├── ai-search-mode.ts           → SearchMode
-│   │   ├── index-document.use-case.ts  → IndexDocumentUseCase
-│   │   ├── index-queued-document.use-case.ts → IndexQueuedDocumentUseCase
-│   │   ├── index-text-stage.ts         → IndexTextStage
-│   │   ├── reembed-chunks.use-case.ts  → ReembedChunksUseCase
-│   │   └── search-documents.use-case.ts → SearchDocumentsUseCase
-│   ├── mail/                    ← a slice with no repository: the queue is the state
-│   │   └── send-mail.use-case.ts       → SendMailUseCase, SendMailInput
-│   ├── member/                   ← a slice: its repository ports live with it
-│   │   ├── member.repository.ts        → MemberRepository, MemberRecord, MemberPage
-│   │   ├── invitation.repository.ts    → InvitationRepository, InvitationRecord
-│   │   ├── invitation.mailer.ts        → InvitationMailer, InvitationMail
-│   │   ├── invite-member.use-case.ts   → InviteMemberUseCase
-│   │   ├── list-members.use-case.ts    → ListMembersUseCase
-│   │   ├── list-invitations.use-case.ts → ListInvitationsUseCase
-│   │   └── revoke-invitation.use-case.ts → RevokeInvitationUseCase
-│   ├── platform/                 ← above every tenant; its seams live with it too
-│   │   ├── platform.reader.ts          → PlatformReader, PlatformOrganization
-│   │   ├── platform-health.reader.ts   → PlatformHealthReader, PlatformHealth
-│   │   └── inspect-platform-status.use-case.ts → InspectPlatformStatusUseCase
-│   └── rbac/
-│       ├── role.repository.ts          → RoleRepository, RoleRecord, RolePage
-│       ├── capability.repository.ts    → CapabilityRepository
-│       └── list-roles.use-case.ts      → ListRolesUseCase
-└── tests/
-    ├── primitive/{principal,authorizer}.spec.ts
-    ├── ai/index-document.use-case.spec.ts
-    ├── rbac/list-roles.use-case.spec.ts
-    ├── mail/send-mail.use-case.spec.ts
-    └── member/{invite-member,list-members,revoke-invitation}.use-case.spec.ts
+│   ├── primitive/                → Principal, Authorizer, QueueName, PartitionedTable, …
+│   ├── port/                     ← 40 cross-cutting ports; abstract classes only, zero implementations
+│   └── <slice>/                  ← ai, analytics, apikey, assistant, doc, flag, mail, member, messaging, notification, platform, rbac, subscriber, widget
+│                                   each: its use-cases and its own repository ports
+└── tests/                        ← mirrors src/
 ```
 
 ## This package does not log
 
-A use-case records a business fact through `ActivityLogger`, or it throws a typed error. That is its
-entire vocabulary, and `check-architecture.mjs` §2 asserts the missing `@loadbearing/observability`
-import.
-
-Those are two of the four data streams, and they differ in the way that matters: an audit row **must
-not** be lost and commits inside the transaction; a diagnostic line **may** be lost and goes to
-stdout. Writing one where the other belongs is the failure
-[Data and scale](../../../docs/opinions/data-and-scale.md) exists to prevent.
-
-The rule pays for itself immediately. Nothing threads a third argument into
-`execute(actor, input)`, there is no ambient request context, and a `ForbiddenError` gets logged
-**once** — at the boundary that catches it, with its full structured context — rather than three
-times on the way up, each layer adding a little and losing a little.
+A use-case records through `ActivityLogger` or throws a typed error — no `observability` import (§2). An
+audit row **must not** be lost (in-transaction); a diagnostic **may** (stdout)
+([Data and scale](../../../docs/opinions/data-and-scale.md)). So no third `execute` argument, no ambient
+context, and a `ForbiddenError` logged **once**, where caught.
 
 ## The ports
 
-Every one is an **abstract class**, not an interface: abstract classes exist at runtime, so `extends`
-gives a real prototype chain and `noImplicitOverride` catches a rename.
+The main ones of `port/`'s 40. Each is an **abstract class**, not an interface — real at runtime, so `extends`
+chains a prototype and `noImplicitOverride` catches a rename.
 
 | Port | Implemented by | Swap target |
 | --- | --- | --- |
@@ -129,60 +62,42 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `UnitOfWork` | `PgUnitOfWork` | never |
 | `VectorStore` | `PgVectorStore` | a dedicated vector database |
 
-Everything unattributed is in `@loadbearing/infrastructure`. Read that list against `container.ts`
-and every name lines up with exactly one binding, with no exceptions — which is the property this
-table exists to make checkable. **Repository ports are not here** — each lives with its feature slice,
-`src/member/member.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
-`VectorStore` is the exception because it is one cross-cutting read seam
-that many subjects query, not one per subject: the test is whether a new feature adds a *method* here
-or a *file*.
+Unattributed implementations are in `infrastructure`; each port has exactly one `container.ts` binding.
+**Repository ports live with their slice** (`src/member/member.repository.ts`) — one glob per slice, honest
+`CODEOWNERS`. `VectorStore` is cross-cutting: a new feature adds a *method*, not a *file*.
 
-### Three ports are split read-from-write, and each split is a guard
+### Three splits read-from-write, each a guard
 
-**`ActivityLogger` writes the audit trail; `ActivityReplayReader` reads it.** The writer runs inside a
-transaction and every use-case holds it. The reader scans in bulk, carries no `Principal`, and is
-reachable only from the worker. One port with both would put a cross-tenant scan on the object every
-use-case already has.
-
-**`AnalyticsProjector` writes the derived store, and nothing reads it.** That is the guard that
-keeps the analytics store derived: *nothing writes to it except the projection*. There was an
-`AnalyticsReader` beside it with two implementations and a driver flag; nothing called it, and it
-was deleted — see [ports.md](reference/ports.md).
-
-**`LogReader` reads diagnostics and nothing writes them from here at all.** `JsonLogger` goes to
-stdout; a collector tails it. The write path has no port because it has no dependency — which is
-exactly what makes swapping the log platform a config change.
+- **`ActivityLogger` writes the audit trail; `ActivityReplayReader` reads it** — in bulk, with no
+  `Principal`, from the worker only, so the cross-tenant scan is not on every use-case's object.
+- **`AnalyticsProjector` alone writes the derived store**; `AnalyticsReader` (a slice port in
+  `analytics/`) reads it for `GetActivityTrendUseCase`, `null` without ClickHouse
+  ([ports](reference/ports.md)).
+- **`LogReader` reads diagnostics; nothing writes them from here** — `JsonLogger` goes to stdout, so the
+  write path has no port and swapping the log platform is config.
 
 ## One port carries a required permitted scope
 
-`VectorStore.search()` and `searchText()` take `goalIds` as a required parameter, and that is the security design
-rather than a convenience.
+`VectorStore.search()` and `searchText()` require `goalIds` — the security design:
 
 ```ts
-const orgId = actor.organizationId;
-const goalIds = actor.capabilities.goalsWith("document.read", await goals.idsForOrg(orgId));
-const hits = await this.vectors.search(orgId, embedding, goalIds, 20);
+const goalIds = actor.capabilities.goalsWith("ai.embedding.read", input.goalIds ?? []);
+const hits = await this.vectors.search(actor.organizationId, embedding, provider.model, goalIds, limit);
 ```
 
-Filtering *after* retrieval means the model has already seen documents the actor cannot access, and
-"we filter the output" is not a defence anyone wants to explain after an incident. Putting the
-permitted scope in the signature means it cannot be forgotten — a caller must produce it.
+Post-retrieval filtering means the model already saw what the actor cannot; in the signature, the scope
+cannot be forgotten.
 
-It matters more once the store is remote. There is no join back to goal membership from ClickHouse or
-from Qdrant, so a scope that is not in the argument list does not exist.
+A remote store (Qdrant) cannot join back to goal membership, so an unpassed scope does not exist.
+`search()` also takes the provider's `model` and compares only its chunks; `ReembedChunksUseCase` rewrites
+stale ones via `stale()` and `saveEmbeddings()`.
 
 ## A flag is asked before a permission
 
-The widget preference use-cases open with `flags.assertOn(actor, "widget.dismissal")`, and only then
-assert a key. The order is the point: a feature this organization does not have yet is not a
-feature the caller lacks a right to, so it answers `NOT_FOUND` rather than `FORBIDDEN`. The error
-carries no flag name, because `toJSON()` reaches the browser.
-
-**A preference is cosmetic, and the slice is built to say so.** Hiding a card writes a row nobody
-reads to decide what anyone may do. A person's own hide is not audited, since a row per click is a
-retention bill for nothing. An admin's hide for everyone is audited, because it is one person
-deciding what every other member sees. A required card is never hidden, and a person cannot bring
-back what an admin hid: `WidgetRules` holds both rules.
+Widget preference use-cases call `flags.assertOn(actor, "widget.dismissal")` before asserting a key — an
+absent feature is `NOT_FOUND`, not `FORBIDDEN`, and names no flag ([authorizer](reference/authorizer.md)).
+**Preferences are cosmetic:** a person's own hide is unaudited (a row per click), an admin's org-wide hide
+is audited; `WidgetRules` keeps required cards visible and admin hides unoverridable.
 
 ## Reference
 

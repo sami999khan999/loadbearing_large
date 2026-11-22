@@ -2,7 +2,7 @@
 //
 // Every assertion here is deliberately a grep rather than a lint rule: it is
 // independent of ESLint config, cannot be silenced by an inline comment, and keeps
-// working if someone reorganises the lint setup. See docs/setup/26.
+// working if someone reorganises the lint setup.
 //
 // Run: pnpm check:architecture
 
@@ -301,7 +301,7 @@ assert("no top-level await in a built barrel", (failures) => {
 
 // ── 7 — `"use client"` only where it belongs ─────────────────────────────────
 //
-// docs/setup/06. Marking an isomorphic package client-only is the failure mode:
+// Marking an isomorphic package client-only is the failure mode:
 // it breaks SSR of translated copy and authorization inside a Server Component.
 
 const CLIENT_PACKAGES = new Set(["ui", "query", "feature"]);
@@ -473,9 +473,9 @@ assert("every domain table declares `organization_id`", (failures) => {
 // eleven other files said ActivityLogger. Two names for the audit port reads as
 // two things, which is the exact confusion the audit/diagnostic split prevents.
 
-// The two pages that state the ban, and therefore have to spell the banned name. Anywhere
+// The page that states the ban, and therefore has to spell the banned name. Anywhere
 // else it is the drift this assertion exists to catch.
-const AUDIT_NAME_EXEMPT = new Set(["docs/setup/26-hygiene-and-ci.md", "docs/opinions/index.md"]);
+const AUDIT_NAME_EXEMPT = new Set(["docs/opinions/index.md"]);
 
 assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
   // `docs/` included: the drift this was written for lived in the observability prose, and
@@ -486,8 +486,6 @@ assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
 
     for (const file of walk(dir, [".ts", ".tsx", ".md"])) {
       if (AUDIT_NAME_EXEMPT.has(rel(file))) continue;
-      // An archived plan is the record of what was believed then, the drift included.
-      if (rel(file).startsWith("docs/plans/archive/")) continue;
 
       const source = readFileSync(file, "utf8");
       if (source.includes("AuditTrail")) {
@@ -782,7 +780,7 @@ assert("no comment block over two lines", (failures) => {
 // ── 15 — every path the docs name exists ────────────────────────────────────
 //
 // The cheapest class of documentation rot, and the one a reader trusts most: a path
-// in backticks reads as a fact about the tree. `docs/setup/15` sent readers to
+// in backticks reads as a fact about the tree. A setup doc once sent readers to
 // `src/cache/` for two months, which is not a folder this repository has ever had.
 //
 // Only paths are checked, and a path is recognised conservatively — see PATH_SHAPE.
@@ -947,8 +945,7 @@ assert("every path the docs name exists", (failures) => {
 // ── 16 — the two pnpm version declarations agree ─────────────────────────────
 //
 // `pnpm/action-setup` reads `packageManager` and nothing else; pnpm 11 reads
-// `devEngines.packageManager`. Both have to exist and say the same thing. See
-// docs/setup/26-hygiene-and-ci.md.
+// `devEngines.packageManager`. Both have to exist and say the same thing.
 
 assert("both pnpm version declarations agree", (failures) => {
   const manifest = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
@@ -1058,7 +1055,7 @@ assert("every foreign key column has an index leading with it", (failures) => {
 // A `tsconfig.json` that includes `src/**` only compiles the tests with nothing but
 // vitest's transform, which erases types and checks none of them. A test double that
 // falls behind its port then compiles, and passes for as long as nobody calls the
-// method it never implemented. See docs/setup/26.
+// method it never implemented.
 
 function typecheckConfig(dir) {
   const manifest = join(dir, "package.json");
@@ -1107,8 +1104,7 @@ assert("every package with tests typechecks them", (failures) => {
 //
 // `pnpm db:generate` emits the unsafe form by default: `CREATE UNIQUE INDEX` over
 // whatever is there, and `ADD COLUMN ... NOT NULL` with no default. Both are correct on
-// an empty table and abort halfway through a deploy on a populated one. See
-// docs/setup/13, "Writing a unique-index migration".
+// an empty table and abort halfway through a deploy on a populated one.
 
 // The three that predate the rule, named with what each would do. They have run
 // everywhere they are going to run: this repository's history is applied to an empty
@@ -1168,7 +1164,7 @@ assert("every migration is safe on a table that already holds rows", (failures) 
 // migration but missing from that list gets no partitions for a new tenant, and the
 // notice is a failed insert on their first write. The inverse is the same failure from
 // the other side: an entry with no `PARTITION BY` anywhere names a table Postgres will
-// reject every `ATTACH PARTITION` against. See docs/setup/13 and
+// reject every `ATTACH PARTITION` against. See
 // packages/infrastructure/docs/reference/partitions.md.
 
 // The allowlist as `{ table -> { tenantKey, column } }`. Entries name their tables
@@ -1704,7 +1700,7 @@ assert("every permission in the catalog gates a procedure", (failures) => {
 // ── 29 — the four shard readers run one algorithm ──────────────────────
 //
 // `DATABASE_SHARD_<n>_URL` is parsed in four places and cannot be parsed in one: each
-// app declares the environment it needs (docs/setup/25), and the scripts above
+// app declares the environment it needs, and the scripts above
 // `packages/infrastructure/src` cannot import an app. So the copies stay and the rule
 // does not — two of them once disagreed about an empty value, and the odd one out threw
 // an error naming shard 1 as its own missing predecessor.

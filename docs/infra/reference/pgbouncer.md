@@ -5,36 +5,29 @@ description: Transaction-mode pooling — the startup-parameter trap, the role f
 
 # `pgbouncer`
 
-One process in front of Postgres, pooling connections in **transaction mode**: a server connection
-is held for the length of a transaction and handed back the moment it commits. That is what lets
-many application connections share few Postgres ones, and it is why
-[`postgres`](postgres.md) runs with `max_connections=200` while `DEFAULT_POOL_SIZE` is 20.
-
-`DATABASE_URL` points here. [`DATABASE_DIRECT_URL`](../../setup/13-infrastructure-postgres.md)
-points past it, at `:5432`, and is what migrations, the seed, `drizzle-kit` and the activity
-archive use.
+One process in front of Postgres pooling in **transaction mode**: a server connection is held for one
+transaction and returned on commit, so many app connections share few Postgres ones — why
+[`postgres`](postgres.md) runs `max_connections=200` with `DEFAULT_POOL_SIZE` 20. `DATABASE_URL`
+points here; `DATABASE_DIRECT_URL` points past it at `:5432`, for migrations, the seed, `drizzle-kit`
+and the activity archive.
 
 ## The container listens on 5432, not 6432
 
-`edoburu/pgbouncer` sets its own `listen_port = 5432`. The compose entry maps
-`${PGBOUNCER_PORT:-6432}:5432` and healthchecks `pg_isready -h localhost -p 5432`. Mapping
-`6432:6432` produces a port nothing answers on and a healthcheck that reports unhealthy forever —
-it looks like a pooler that will not start, and it is a pooler nobody is talking to.
+`edoburu/pgbouncer` sets `listen_port = 5432`, so compose maps `${PGBOUNCER_PORT:-6432}:5432` and
+healthchecks `pg_isready -h localhost -p 5432`. `6432:6432` gives a port nothing answers and a
+forever-unhealthy check — a pooler nobody is talking to, looking like one that will not start.
 
 ## The startup-parameter trap
 
-`pg` sends `statement_timeout` as a **startup parameter**. A transaction pooler cannot forward one,
-because the server connection it would apply to belongs to whoever holds it next. pgBouncer's
-answer is `IGNORE_STARTUP_PARAMETERS`, and both halves of what that does matter:
+`pg` sends `statement_timeout` as a **startup parameter**, which a transaction pooler cannot forward
+(the server connection belongs to whoever holds it next). pgBouncer's `IGNORE_STARTUP_PARAMETERS`:
 
-- **Without `statement_timeout` in the list, nothing connects at all.** pgBouncer closes the socket
-  before authentication with `unsupported startup parameter: statement_timeout`, and drizzle
-  reports it as a bare `Failed query` naming nothing.
-- **With it in the list, the parameter is not weakened — it is gone.** `SHOW statement_timeout`
-  through the pooler reads `0`. Unlimited, on every application connection.
+- **Without `statement_timeout` listed, nothing connects** — the socket closes before auth with
+  `unsupported startup parameter: statement_timeout`, surfacing in drizzle as a bare `Failed query`.
+- **With it listed, the parameter is gone** — `SHOW statement_timeout` through the pooler reads `0`,
+  unlimited on every app connection.
 
-So the ignore list is not a nicety that quiets a warning; it converts a refused connection into an
-unlimited one. Migration `0022` is what makes that safe:
+So the ignore list turns a refused connection into an unlimited one. Migration `0022` makes that safe:
 
 ```sql
 ALTER ROLE CURRENT_USER SET statement_timeout = '30s';
@@ -42,81 +35,65 @@ ALTER ROLE CURRENT_USER SET idle_in_transaction_session_timeout = '60s';
 ALTER ROLE CURRENT_USER SET lock_timeout = '10s';
 ```
 
-A role default is read when a **server** connection starts, which is the one mechanism a pooled
-session inherits. Work that needs longer raises it per transaction with `SET LOCAL` inside
+A role default is read when a **server** connection starts — the one thing a pooled session inherits.
+Longer work raises it per transaction with `SET LOCAL` inside
 [`PgUnitOfWork.run`](../../../packages/infrastructure/docs/reference/unit-of-work.md).
+`application_name` is tracked natively, reaching `pg_stat_activity` with no entry or role setting.
 
-`application_name` is the exception: pgBouncer tracks it natively, so it reaches
-`pg_stat_activity` without an ignore-list entry and without a role setting.
-
-**`CURRENT_USER` is whoever ran the migration.** The role that runs `db:migrate` must be the role
-the application connects as. A deployment that separates them lands the floor on the migrator and
-leaves the application at `0`, with nothing in either log saying so.
+**`CURRENT_USER` is whoever ran the migration**, so `db:migrate` must run as the role the app connects
+as; separate roles land the floor on the migrator and leave the app at `0`, silently.
 
 ## Never issue a session-level `SET`
 
-In transaction mode pgBouncer does **not** run `server_reset_query` — `DISCARD ALL` is configured
-and, without `server_reset_query_always = 1`, never executes. A session-level `SET` on a pooled
-connection therefore survives, and is inherited by every client that is later handed that server
-connection. Measured: one client setting `statement_timeout = '7s'` was followed by twenty-five
-fresh clients that all read `7s`.
+In transaction mode `server_reset_query` (`DISCARD ALL`) never runs without
+`server_reset_query_always = 1`, so a session `SET` survives and is inherited by every later client on
+that server connection. Measured: one client setting `statement_timeout = '7s'`, then twenty-five fresh
+clients all reading `7s`. **One `SET` poisons the pool.**
 
-One `SET` does not poison one connection. It poisons the pool.
-
-The repository is clean today — no `SET`, no `LISTEN`/`NOTIFY`, no cursors, no temporary tables, no
-session-level advisory locks, no named prepared statements; the three advisory locks are all
-`pg_advisory_xact_lock`, which dies with its transaction. `SET LOCAL` is always correct and always
-what to reach for. Turning `SERVER_RESET_QUERY_ALWAYS` on would buy insurance at the price of one
-round trip per transaction; the rule is cheaper, and `tests/smoke/pooled.smoke.spec.ts` is what
-notices if it stops being true.
+The repository is clean: no `SET`, `LISTEN`/`NOTIFY`, cursors, temporary tables, session advisory
+locks or named prepared statements; its three advisory locks are `pg_advisory_xact_lock`. `SET LOCAL`
+is always the answer. `SERVER_RESET_QUERY_ALWAYS` would cost a round trip per transaction; the rule is
+cheaper, and `tests/smoke/pooled.smoke.spec.ts` notices if it breaks.
 
 ## `RECONNECT`, never restart
 
-A role setting applies to new server connections. Connections already open when migration `0022`
-lands keep their old value until they close — `server_idle_timeout` (600 s) for an idle pool, up to
-`server_lifetime` (3600 s, randomised) for a busy one. The deploy step is:
+Role settings apply to new server connections; open ones keep old values until they close —
+`server_idle_timeout` (600 s) idle, up to `server_lifetime` (3600 s, randomised) busy. After `0022`:
 
 ```
 psql "postgres://ratchet:ratchet@localhost:16432/pgbouncer" -c "RECONNECT"
 ```
 
-**Not a restart.** `RECONNECT` closes server-side connections and leaves clients alone. Restarting
-the container drops every client socket, and `pg` raises those on *idle* clients as a pool `error`
-event — which the worker turns into `uncaughtException` and `exit(1)`. `Database` now registers a
-listener (`database.pool.error`) so the process survives, but the two verbs still are not
-interchangeable.
+**Not a restart.** `RECONNECT` closes server connections and leaves clients alone. A restart drops
+every client socket, which `pg` raises on idle clients as a pool `error` — turned by the worker into
+`uncaughtException` and `exit(1)`. `Database` now listens (`database.pool.error`) so the process
+survives, but the verbs are not interchangeable.
 
 ## Saturation is invisible from inside the application
 
-`Container.health()` reports `pool: { total, idle, waiting, max }` off this process's own
-`pg.Pool`. That number cannot see the pooler. With `DEFAULT_POOL_SIZE=2` and three concurrent
-transactions from one `Pool({ max: 10 })`, the application reads `waiting: 0` while the pooler
-reports `cl_waiting=1`. After `query_wait_timeout` (120 s by default) the client gets an error it
-has no counter for.
+`Container.health()` reports `pool: { total, idle, waiting, max }` from this process's `pg.Pool`,
+which cannot see the pooler: with `DEFAULT_POOL_SIZE=2` and three concurrent transactions from one
+`Pool({ max: 10 })`, the app reads `waiting: 0` while the pooler shows `cl_waiting=1`, and after
+`query_wait_timeout` (120 s) the client gets an error it has no counter for.
 
-`database.pool.saturated` fires on this side, and its sampling window is derived from
-`DATABASE_POOL_CONNECT_TIMEOUT_MS` rather than fixed. That is not a detail: `waiting` cannot outlive
-the connect timeout, because the caller is rejected when it expires. A probe with a ten-second
-window against a five-second connect timeout would never fire once.
+`database.pool.saturated` fires on this side with a sampling window derived from
+`DATABASE_POOL_CONNECT_TIMEOUT_MS` — `waiting` cannot outlive the connect timeout, so a ten-second
+window against a five-second timeout would never fire. **A readiness probe competes with the traffic it
+reports on:** `health()` reads `stats()` free, but `isHealthy()` runs `SELECT 1` through the pool, so
+under saturation `/api/health` is slow for the same reason requests are — mind short liveness timeouts.
 
-**A readiness probe competes with the traffic it reports on.** `Container.health()` reads
-`stats()` for free, but `isHealthy()` runs `SELECT 1` and queues for a pool slot like anything
-else. Under real saturation `/api/health` is slow for the same reason the requests are — worth
-knowing before a liveness probe with a short timeout takes a busy replica out of rotation.
-
-Ask the pooler:
+Ask the pooler (`ADMIN_USERS` enables this and `RECONNECT`):
 
 ```
 psql "postgres://ratchet:ratchet@localhost:16432/pgbouncer" -c "SHOW POOLS"
 ```
 
-`cl_active`, `cl_waiting`, `sv_active` and `maxwait` are the four that matter. `ADMIN_USERS`
-is what makes both this and `RECONNECT` available.
+`cl_active`, `cl_waiting`, `sv_active` and `maxwait` are the four that matter.
 
 ## What a transaction pooler does not break
 
-Worth knowing, because the list is shorter than the folklore suggests. Verified against the running
-stack, and asserted by `tests/smoke/pooled.smoke.spec.ts`:
+Shorter than folklore; verified on the running stack and asserted by
+`tests/smoke/pooled.smoke.spec.ts`:
 
 | | |
 |---|---|
@@ -126,15 +103,11 @@ stack, and asserted by `tests/smoke/pooled.smoke.spec.ts`:
 | Better Auth's `drizzleAdapter` | fine — it opens no transaction of its own |
 | `ALTER TABLE … DETACH PARTITION … CONCURRENTLY` | fine **as a single statement** |
 
-The last one is the common misconception. It fails inside a transaction — on a direct connection
-just as surely as a pooled one — and the pooler has nothing to do with it.
+The last fails inside any transaction, direct or pooled; the pooler is irrelevant.
 
 ## Sizing
 
-`DEFAULT_POOL_SIZE` × databases × pgBouncer instances must stay under Postgres's
-`max_connections`, with headroom for superuser connections and `RESERVE_POOL_SIZE`. The
-application's own `DATABASE_POOL_MAX` is now what it costs pgBouncer in *client* slots
-(`MAX_CLIENT_CONN`), not what it costs Postgres — which is the whole point of putting one here.
-
-A managed pooler replaces this container with no code change: it is [Tier
-0](../../opinions/dependencies.md), the deployment runs it, and no manifest names it.
+`DEFAULT_POOL_SIZE` × databases × pgBouncer instances stays under `max_connections`, with headroom for
+superusers and `RESERVE_POOL_SIZE`. The app's `DATABASE_POOL_MAX` now costs *client* slots
+(`MAX_CLIENT_CONN`), not Postgres connections — the point of the pooler. A managed pooler replaces this
+container with no code change: [Tier 0](../../opinions/dependencies.md).
