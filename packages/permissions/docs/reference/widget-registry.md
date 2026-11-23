@@ -1,5 +1,5 @@
 ---
-title: widget-registry
+title: WidgetRegistry
 description: WidgetRegistry — the zones, the widgets registered to them, the six-word visibility answer, and why the whole thing is data with no React.
 ---
 

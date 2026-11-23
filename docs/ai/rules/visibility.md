@@ -1,3 +1,8 @@
+---
+title: Visibility
+description: Flag, entitlement, permission, widget preference: which hides what, and in what order.
+---
+
 # Visibility
 
 Four independent reasons something is missing from a screen. Each only narrows the one above it.
