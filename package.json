@@ -53,7 +53,7 @@
     "platform:grant": "pnpm --filter @loadbearing/infrastructure run platform:grant",
     "queue:replay": "pnpm --filter @loadbearing/infrastructure run queue:replay",
     "ai:reindex": "pnpm --filter @loadbearing/infrastructure run ai:reindex",
-    "explained:publish": "node tooling/scripts/explained-publish.mjs",
+    "docs:publish": "node tooling/scripts/docs-publish.mjs",
     "assistant:load": "node tooling/scripts/assistant-load.mjs",
     "bench": "node tooling/scripts/bench.mjs",
     "doc:bench": "pnpm --filter @loadbearing/infrastructure run doc:bench",
