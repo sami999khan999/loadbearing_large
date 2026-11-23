@@ -1,5 +1,5 @@
 ---
-title: redis
+title: redis-cache and redis-queue
 description: Two instances with opposite durability guarantees, every flag explained, and why one container was the wrong answer.
 ---
 
