@@ -120,7 +120,7 @@ keyed by organization) and survives a move; a `shard` column would record stale 
 ## Adopting it, in the supported order
 
 ```bash
-pnpm infra:up:analytics          # starts the container; nothing writes to it yet
+pnpm infra up analytics          # starts the container; nothing writes to it yet
 ```
 
 1. **Set `CLICKHOUSE_URL`** — the projector and reader are built, and the worker registers
@@ -129,7 +129,7 @@ pnpm infra:up:analytics          # starts the container; nothing writes to it ye
 2. **Watch `analytics.reconciliation.completed` come back clean** for a few days, with a non-growing
    `lagSeconds` on `analytics.projection.completed`, before trusting the screen's history.
 
-**Not started by `pnpm infra:up`** — a running store with no consumer looks like a decision.
+**Not started by `pnpm infra up`** — a running store with no consumer looks like a decision.
 
 ---
 

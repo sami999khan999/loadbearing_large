@@ -58,7 +58,7 @@ docker compose -f infra/docker-compose.yml exec postgres \
   psql -U ratchet -d ratchet -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 
 # or start over
-pnpm infra:reset
+pnpm infra reset
 ```
 
 > Address the container by **service name** (`postgres`), not a substituted container ID — the
@@ -71,7 +71,7 @@ pnpm infra:reset
 | Consumer | Reaches it at | For |
 |---|---|---|
 | `apps/web`, `apps/worker` (host) | `localhost:16432` | everything, via `DATABASE_URL` — **through [pgBouncer](pgbouncer.md)** |
-| `migrate.ts`, `seed.ts`, `drizzle-kit` (host) | `localhost:15432` | DDL, via `DATABASE_DIRECT_URL` |
+| `script/migrate.ts`, `script/seed-*.ts`, `drizzle-kit` (host) | `localhost:15432` | DDL, via `DATABASE_DIRECT_URL` |
 | `migrate.ts`, `partitions.ts`, under the `sharded` profile | `localhost:15433` | the same DDL on node 1, via `DATABASE_SHARD_1_DIRECT_URL` |
 | `PgPartitionArchiveGateway` | `localhost:15432` | `DETACH … CONCURRENTLY` and a month-long stream |
 
@@ -94,7 +94,7 @@ floor reaches pooled sessions only once server connections are recycled with `RE
 
 Deliberately one Postgres. The app reaches it through a `DatabaseCluster` and a key, every table is
 `catalog`, `local` or `routed`, and every tenant's `shard_assignments` row names node 0 — so routing
-runs for real on one machine, and a second node is two environment variables. `pnpm infra:up:sharded`
+runs for real on one machine, and a second node is two environment variables. `pnpm infra up sharded`
 starts `postgres-shard-1` and `pgbouncer-shard-1` on `:5433`/`:6433` (same image and init script, own
 volume) for rehearsing the split, which `tests/smoke/sharded.smoke.spec.ts` exercises. See
 [sharding](../../../packages/infrastructure/docs/reference/sharding.md) and [compose](compose.md).

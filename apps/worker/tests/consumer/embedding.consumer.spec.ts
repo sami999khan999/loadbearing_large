@@ -29,7 +29,7 @@ const harness = () => {
 };
 
 describe("EmbeddingConsumer", () => {
-  // `pnpm ai:reindex` queues a job naming only the tenant; it must not reach the index path,
+  // `pnpm ops ai-reindex` queues a job naming only the tenant; it must not reach the index path,
   // which would read a document id the job does not have.
   it("routes a reembed job to the re-embed pass, placed on the tenant's node", async () => {
     const { consumer, reembed, indexQueued, placedFor } = harness();

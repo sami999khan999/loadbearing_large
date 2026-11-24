@@ -157,7 +157,7 @@ straggler lose nothing — and with `quiesce` a no-op the straggler is lost ever
 ## What routing costs a request, measured
 
 ```bash
-pnpm infra:up:sharded          # plus the two DATABASE_SHARD_1_* lines in .env
+pnpm infra up sharded          # plus the two DATABASE_SHARD_1_* lines in .env
 ROUTED_SCALE=1000 pnpm smoke
 ```
 
@@ -225,13 +225,13 @@ assistant usage walk) and the public docs (`doc.fn.ts` places them with `replica
 `PgDocPageRepository` and `PgDocSpaceRepository` read through `reader()`). The status panel adds the lag — `now() - pg_last_xact_replay_timestamp()`, zero
 once everything received is replayed (an idle primary sends nothing).
 
-`pnpm infra:up:replica` starts node 0's standby. See
+`pnpm infra up replica` starts node 0's standby. See
 [compose](../../../../docs/infra/reference/compose.md) for how it clones itself.
 
 ## Rehearsing the split
 
-`pnpm infra:up:sharded` starts a second Postgres and pooler; uncomment `DATABASE_SHARD_1_*` and
-`db:migrate` covers both. `tests/smoke/sharded.smoke.spec.ts` (gated on `Stack.shard1` from
+`pnpm infra up sharded` starts a second Postgres and pooler; uncomment `DATABASE_SHARD_1_*` and
+`db migrate` covers both. `tests/smoke/sharded.smoke.spec.ts` (gated on `Stack.shard1` from
 `vitest.smoke.config.ts`, since §3 bans `process.env` in tests) places two tenants and asserts:
 
 - each key resolves to the node its row names;

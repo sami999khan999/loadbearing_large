@@ -158,7 +158,7 @@ describe("the pooled connection path", () => {
     ).rows;
     // Any id: the outbox names no actor by foreign key, and the seed signs nobody up.
     const actor = { id: crypto.randomUUID() };
-    if (!org) throw new Error("run `pnpm db:seed` first");
+    if (!org) throw new Error("run `pnpm seed:dev` first");
 
     const name = `probe.pooled.${Date.now()}`;
     for (let index = 0; index < 20; index += 1) {

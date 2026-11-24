@@ -250,7 +250,7 @@ which reads `process.env` in exactly two files.
 ```bash
 git pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml build web worker
-docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm web pnpm db:migrate
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm web pnpm db migrate
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -324,7 +324,7 @@ An answer is slow I/O, not CPU. One worker process holds **`WORKER_ASSISTANT_CON
 once** (default 32); throughput is that divided by answer duration, and the excess waits in the
 `assistant` queue rather than being refused.
 
-`pnpm assistant:load` measures it, against `ASSISTANT_PROVIDER=fake` with `ASSISTANT_FAKE_DELAY_MS`
+`pnpm ops assistant-load` measures it, against `ASSISTANT_PROVIDER=fake` with `ASSISTANT_FAKE_DELAY_MS`
 set to a realistic duration. Measured 2026-11-10 on one 4-core, 16 GB laptop running `pnpm dev`, every
 container and the load generator; each row is 240 questions from 60 users, ~3 s of streaming each:
 

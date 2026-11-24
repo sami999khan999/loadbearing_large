@@ -134,12 +134,12 @@ depends on or a user reads right after writing; everything else is a derived sto
 ## Running it
 
 ```bash
-pnpm infra:up              # four stores + observability     ← the normal command
-pnpm infra:core            # four stores only
-pnpm infra:up:analytics    # the above, plus ClickHouse
-pnpm infra:down            # stop everything, keep volumes
-pnpm infra:reset           # stop everything, destroy volumes
-pnpm infra:logs            # tail every service
+pnpm infra up              # four stores + observability     ← the normal command
+pnpm infra up core            # four stores only
+pnpm infra up analytics    # the above, plus ClickHouse
+pnpm infra down            # stop everything, keep volumes
+pnpm infra reset           # stop everything, destroy volumes
+pnpm infra logs            # tail every service
 ```
 
 | Profile | Services | Default |
@@ -148,7 +148,7 @@ pnpm infra:logs            # tail every service
 | `observability` | `loki`, `alloy` | **on** — the diagnostic stream is live today |
 | `analytics` | `clickhouse` | **off** — see [clickhouse](reference/clickhouse.md) |
 
-**Starting ClickHouse and feeding it are separate switches:** `pnpm infra:up:analytics` runs the
+**Starting ClickHouse and feeding it are separate switches:** `pnpm infra up analytics` runs the
 container; `CLICKHOUSE_URL` makes the app build a projector and the worker register projection and
 reconciliation schedules. Both default off; the adapters exist either way.
 

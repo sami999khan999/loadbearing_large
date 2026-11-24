@@ -386,7 +386,7 @@ services:
       ]
     volumes:
       # No init script. The entrypoint runs one only on an empty volume and never on a
-      # managed instance, so the schema was frozen at first boot. `pnpm ch:migrate` is
+      # managed instance, so the schema was frozen at first boot. `pnpm ops ch-migrate` is
       # the path now — see packages/infrastructure/docs/reference/clickhouse-migrations.md.
       - clickhousedata:/var/lib/clickhouse
     ulimits:

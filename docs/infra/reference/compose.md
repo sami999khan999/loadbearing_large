@@ -71,14 +71,14 @@ there is no log viewer**: use `docker compose logs -f <service>` or curl against
 
 `postgres-shard-1` and `pgbouncer-shard-1`, not started by default. Same image and
 `postgres.init.sql`, own volume (sharing the catalog's data directory would rehearse nothing).
-`pnpm infra:up:sharded` starts them; two commented `.env.example` lines point `DATABASE_SHARD_1_URL`
+`pnpm infra up sharded` starts them; two commented `.env.example` lines point `DATABASE_SHARD_1_URL`
 at `:6433` and its direct counterpart at `:5433`. No range or key config: `shard_assignments` on the
 catalog names each tenant's node, so a node is two URLs —
 [sharding](../../../packages/infrastructure/docs/reference/sharding.md).
 
 ### Node 0's standby, profile `replica`
 
-`postgres-replica`, a streaming hot standby of `postgres`, started by `pnpm infra:up:replica`;
+`postgres-replica`, a streaming hot standby of `postgres`, started by `pnpm infra up replica`;
 `DATABASE_REPLICA_URL` points at `:15434`. No pooler: nothing writes to it, and its readers are the
 worker's batch reads.
 
@@ -144,7 +144,7 @@ The `pnpm infra:*` scripts wrap these, `observability` on by default.
 | `clickhousedata` | clickhouse | replaying the activity log |
 
 **`redis-cache` has no volume on purpose** — one would invite treating it as durable. `pnpm
-infra:reset` destroys all eight, fine locally; anywhere with real pending work, clearing the cache and
+infra reset` destroys all eight, fine locally; anywhere with real pending work, clearing the cache and
 clearing the queue are different operations, which the two-instance split makes possible.
 
 ### Bind mounts
@@ -188,7 +188,7 @@ service and leaving `2xxxx` for the next stack.
 
 **They live in the root `.env`, the only env file.** With `-f infra/docker-compose.yml` Compose's
 project directory is `infra/`, so it once read `infra/.env` and the stack and apps disagreed about
-where Postgres was. `pnpm infra:up` now goes through `tooling/scripts/compose.mjs`, which passes
+where Postgres was. `pnpm infra up` now goes through `tooling/scripts/compose.mjs`, which passes
 `--env-file <root>/.env` only when it exists (the flag errors on a missing file, there is no
 `-if-exists`, and CI has no `.env`).
 
@@ -203,7 +203,7 @@ where Postgres was. `pnpm infra:up` now goes through `tooling/scripts/compose.mj
 | `POSTGRES_SHARD_1_PORT` | 15433 | `PGBOUNCER_SHARD_1_PORT` | 16433 |
 | `POSTGRES_REPLICA_PORT` | 15434 | | |
 
-A checkout with no `.env` (which CI is) gets these defaults, so `check:architecture` §27 asserts each
+A checkout with no `.env` (which CI is) gets these defaults, so `check architecture` §27 asserts each
 equals `.env.example`, and pairs each `*_PORT` with the URL that dials it (`POSTGRES_PORT` ↔
 `DATABASE_DIRECT_URL`, `PGBOUNCER_PORT` ↔ `DATABASE_URL`). `MINIO_CONSOLE_PORT`, `MAILPIT_UI_PORT`,
 `ALLOY_PORT` and `CLICKHOUSE_NATIVE_PORT` have no counterpart — you dial them, the app does not.

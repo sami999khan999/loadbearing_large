@@ -8,7 +8,7 @@ owner: sami
 
 What lives nowhere else: machine setup, test accounts, how work is checked, and the traps that cost
 time. Open work is in [`BACKLOG.md`](BACKLOG.md) — all of it waits on hardware, traffic or a trigger.
-Last verified 2026-11-12: `check:architecture` 32/32, `pnpm test` 2,639 tests, `pnpm smoke` 56.
+Last verified 2026-11-12: `check architecture` 32/32, `pnpm test` 2,639 tests, `pnpm smoke` 56.
 
 ## Setting up a new machine
 
@@ -19,31 +19,30 @@ git clone https://github.com/prodicle/loadbearing_tanstack_start_kit.git && cd l
 git checkout dev && git pull
 pnpm install
 cp .env.example .env            # first time only; then diff them, below
-pnpm infra:up                    # postgres, pgbouncer, 2× redis, minio, mailpit, loki
-pnpm db:migrate                  # every node; creates every tenant's partitions
-pnpm db:seed                     # grants platform keys (incl. platform.account.*) to platform_admin
+pnpm infra up                    # postgres, pgbouncer, 2× redis, minio, mailpit, loki
+pnpm db migrate                  # every node; creates every tenant's partitions
+pnpm seed:dev                     # grants platform keys (incl. platform.account.*) to platform_admin
 pnpm build:packages && pnpm --filter @loadbearing/web build   # before typecheck: the route tree is generated
-pnpm check:architecture          # expect 32/32 with no "○ skipped"
+pnpm check architecture          # expect 32/32 with no "○ skipped"
 pnpm typecheck && pnpm lint && pnpm test
 pnpm dev                         # web on http://localhost:13000, Mailpit on :18025
 ```
 
 - **A `.env` naming more nodes needs every matching profile.** With `DATABASE_SHARD_1_*`,
-  `DATABASE_REPLICA_URL`, `CLICKHOUSE_URL` and a cold tier set, plain `infra:up` makes `db:migrate`
-  fail dialling 15433 and smoke fail `fetch failed`. Use
-  `node tooling/scripts/compose.mjs --profile observability --profile sharded --profile replica --profile analytics --profile cold-tier up -d`,
-  then `pnpm ch:migrate`.
+  `DATABASE_REPLICA_URL`, `CLICKHOUSE_URL` and a cold tier set, plain `pnpm infra up` makes
+  `pnpm db migrate` fail dialling 15433 and smoke fail `fetch failed`. Use
+  `pnpm infra up sharded replica analytics cold-tier`, then `pnpm ops ch-migrate`.
 - **`.env` drifts behind `.env.example` unnoticed:**
   `comm -23 <(grep -oE "^[A-Z_]+=" .env.example | sort -u) <(grep -oE "^[A-Z_]+=" .env | sort -u)`.
 - **Ports:** web 13000, Postgres 16432, pgBouncer 16433, Mailpit 18025, MinIO 19000.
 
 ### Test accounts
 
-A fresh database has none; `pnpm db:seed` creates organizations and roles, users come from sign-up.
+A fresh database has none; `pnpm seed:dev` creates organizations and roles, users come from sign-up.
 
 1. Sign up `alice@example.test`, `bob@example.test`, `carol@example.test`, password `Correct-Horse-9`.
 2. Verify each in Mailpit — its text part ends lines in `\r`; strip it before `curl`-ing a link.
-3. `pnpm platform:grant alice@example.test` makes alice platform admin.
+3. `pnpm ops platform-grant alice@example.test` makes alice platform admin.
 4. Sign each in. Under `AUTH_ENROLMENT_MODE=personal` the first sign-in founds their own org (not
    alice's — the grant already gave her a membership).
 5. For a member: bob invites carol (`member/invite`); carol, already in an org, accepts via
@@ -53,7 +52,7 @@ A fresh database has none; `pnpm db:seed` creates organizations and roles, users
 
 ## How work is checked
 
-Each phase: **gates** (build, web build, typecheck, lint, `check:architecture`, `check:contrast`,
+Each phase: **gates** (build, web build, typecheck, lint, `check architecture`, `check contrast`,
 `pnpm test`), then a **scripted walk** against `pnpm dev` with `curl` cookie jars, then **cleanup**.
 
 ```bash
@@ -96,7 +95,7 @@ Drive Playwright's cached Chromium (`~/.cache/ms-playwright/chromium-*/chrome-li
 - **Commits:** conventional, scope from `commitlint.config.js`, subject not capitalised
   ("`PgAccountRepository` …" is rejected), header ≤ 100 characters, one commit per layer. **A rejected
   commit leaves its files staged for the next one** — check `git diff --cached --quiet` first.
-- **The pre-push hook runs lint, `check:architecture` and `check:contrast`.** §8 fails "`.output` is
+- **The pre-push hook runs lint, `check architecture` and `check contrast`.** §8 fails "`.output` is
   older than `src`" after any change under `apps/web/src` (even a `biome check --write` re-sort) —
   rebuild web right before pushing.
 - **Comments: `//`, two lines max (§14)** — a line above an existing two-line comment fails; rewrite.

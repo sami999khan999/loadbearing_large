@@ -15,7 +15,7 @@ mailpit:
     test: ["CMD", "/mailpit", "readyz"]
 ```
 
-No config file or volume; the inbox is in memory, so `pnpm infra:down` empties it — right for a
+No config file or volume; the inbox is in memory, so `pnpm infra down` empties it — right for a
 scratch mailbox.
 
 ## What it is for

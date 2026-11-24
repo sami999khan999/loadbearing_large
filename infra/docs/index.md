@@ -18,7 +18,7 @@ containers, not in-process fakes — a filesystem S3 means the S3 path first run
 | **Depends on** | Docker, and the `.env` at the repository root |
 | **Used by** | `pnpm dev`, `apps/web`, `apps/worker` — over TCP, never by import |
 | **Environment** | development only; the production analogue is [deployment](../../docs/infra/deployment.md) |
-| **Build** | none — `pnpm infra:up` pulls images and starts them |
+| **Build** | none — `pnpm infra up` pulls images and starts them |
 
 ```
 infra/
@@ -62,16 +62,16 @@ Three rows that look like mistakes: **two Redis containers** (a flushable cache 
 is data loss — [Data and scale](../../docs/opinions/data-and-scale.md)); **`minio-init` at `exited (0)`
 is success** (without it the first upload fails `NoSuchBucket`); **nothing dials Alloy** (it reads the
 socket and `logs/`, so the log platform swaps by deleting a container). Starting ClickHouse
-(`pnpm infra:up:analytics`) and feeding it (`CLICKHOUSE_URL`) are separate switches.
+(`pnpm infra up analytics`) and feeding it (`CLICKHOUSE_URL`) are separate switches.
 
 ## Running it
 
 ```bash
-pnpm infra:up              # the four stores + observability     ← the normal command
-pnpm infra:core            # the four stores only
-pnpm infra:up:analytics    # the above, plus ClickHouse
-pnpm infra:down            # stop everything, keep volumes
-pnpm infra:reset           # stop everything, destroy volumes
+pnpm infra up              # the four stores + observability     ← the normal command
+pnpm infra up core            # the four stores only
+pnpm infra up analytics    # the above, plus ClickHouse
+pnpm infra down            # stop everything, keep volumes
+pnpm infra reset           # stop everything, destroy volumes
 ```
 
 `down`, `reset` and `logs` pass `--profile "*"`, or a reset leaves ClickHouse running. `docker compose

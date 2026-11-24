@@ -40,7 +40,7 @@ Longer work raises it per transaction with `SET LOCAL` inside
 [`PgUnitOfWork.run`](../../../packages/infrastructure/docs/reference/unit-of-work.md).
 `application_name` is tracked natively, reaching `pg_stat_activity` with no entry or role setting.
 
-**`CURRENT_USER` is whoever ran the migration**, so `db:migrate` must run as the role the app connects
+**`CURRENT_USER` is whoever ran the migration**, so `db migrate` must run as the role the app connects
 as; separate roles land the floor on the migrator and leave the app at `0`, silently.
 
 ## Never issue a session-level `SET`

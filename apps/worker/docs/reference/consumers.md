@@ -57,7 +57,7 @@ Retries are driven by rejection, so a `catch` turns a retryable failure into **s
 failures are observed from the `failed` event, which does not swallow. Logic lives in
 `IndexDocumentUseCase`. **Three job names:** `index` carries a document; `reembed`
 (`ReembedChunksUseCase`) and `doc-reindex` (`--docs`, `ReindexDocsUseCase`) name a tenant, queued one per
-organization by `pnpm ai:reindex`, each placed on the tenant's node.
+organization by `pnpm ops ai-reindex`, each placed on the tenant's node.
 
 ## `AnalyticsConsumer`: two jobs, one failure
 
@@ -138,7 +138,7 @@ is local, not a retry of every subscriber.
   deliveries or 24 hours (the drain's own `removeOnComplete: 10` once trimmed the shared set to ten; it is
   `true` now). Subscribers' idempotency on `event.id` is the guarantee.
 - **Twelve attempts from five seconds** (~three hours) — the row is already published, so exhaustion needs
-  `pnpm queue:replay event deliver` (kept a week). Others default to eight (~ten minutes).
+  `pnpm ops queue-replay event deliver` (kept a week). Others default to eight (~ten minutes).
 - **`eachShard` continues past a failing node**, logging `shard.sweep.failed { node }` and rethrowing at
   the end.
 - **Unlistened events are still marked published.**

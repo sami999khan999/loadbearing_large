@@ -34,8 +34,8 @@ two Redis instances · S3 · stdout → Loki · ClickHouse behind a driver flag
   per-plan entitlements and feature flags, all enforced on the server.
 - **📬 One send path** — every mail is a BullMQ job the worker renders and sends with retries,
   backoff and a rate limiter; never from inside a request.
-- **🎨 Six themes, twelve colours** — `pnpm check:contrast` checks 154 pairings against WCAG AA.
-- **🛡️ 32 architecture assertions** — `pnpm check:architecture` catches what typecheck, lint and tests
+- **🎨 Six themes, twelve colours** — `pnpm check contrast` checks 154 pairings against WCAG AA.
+- **🛡️ 32 architecture assertions** — `pnpm check architecture` catches what typecheck, lint and tests
   miss.
 
 | Layer | Choice |
@@ -72,8 +72,8 @@ thin and deletable. Full rules: [`docs/ai/rules/layering.md`](docs/ai/rules/laye
 ```bash
 pnpm install
 node -e "require('fs').copyFileSync('.env.example', '.env')"   # then set AUTH_SECRET
-pnpm infra:up                                                  # the whole local stack
-pnpm db:migrate && pnpm db:seed
+pnpm infra up                                                  # the whole local stack
+pnpm db migrate && pnpm seed:dev
 pnpm dev                                                       # web + worker + realtime
 ```
 
@@ -84,14 +84,16 @@ Open **http://localhost:13000/sign-up**; the verification mail lands in Mailpit 
   missing key fails boot. Set a real `AUTH_SECRET` (`openssl rand -base64 32`); `change-me` is too
   short on purpose.
 - **Ports** are the well-known ones with a `1` in front, all in the root `.env` (the only env file).
-  Change a `*_PORT` and the URL dialling it together — `check:architecture` §27 fails if they
+  Change a `*_PORT` and the URL dialling it together — `check architecture` §27 fails if they
   disagree. For the web app change `WEB_PORT`, and `APP_BASE_URL`, `AUTH_URL` and
   `AUTH_TRUSTED_ORIGINS` with it.
 - **Infrastructure:** Postgres + pgvector, two Redis, MinIO, Mailpit, Loki/Alloy; ClickHouse via
-  `pnpm infra:up:analytics`. Wait for `docker compose -f infra/docker-compose.yml --profile "*" ps`
+  `pnpm infra up analytics`. Wait for `docker compose -f infra/docker-compose.yml --profile "*" ps`
   to show healthy. See [`docs/infra/`](docs/infra/index.md).
-- **`db:seed`** creates the `loadbearing` organization and four system roles, no user. `pnpm
-  auth:tables` prints Better Auth's expected schema for diffing after an upgrade.
+- **`seed:prod`** creates the `loadbearing` platform organization, its roles, and a docs space per
+  docs tree (read by platform staff at `/doc`). **`seed:dev`** adds a verified platform admin,
+  `admin@loadbearing.test`, and prints its password once (`ADMIN_PASSWORD` sets one). Every other
+  task is `pnpm ops <task>`; `pnpm ops` alone lists them.
 
 | Service | Address |
 |---|---|
@@ -100,7 +102,7 @@ Open **http://localhost:13000/sign-up**; the verification mail lands in Mailpit 
 | 🪣 MinIO console | http://localhost:19001 |
 | 📜 Loki API | http://localhost:13100 |
 | 💓 Readiness probe | http://localhost:13000/api/health |
-| 🗃️ Drizzle Studio | `pnpm db:studio` |
+| 🗃️ Drizzle Studio | `pnpm db studio` |
 
 > [!IMPORTANT]
 > Every message is a job on `QueueName.MAIL`, so **nothing reaches Mailpit unless the worker runs**
@@ -122,7 +124,7 @@ and accept in another browser profile — that `member` is sent to `/forbidden` 
 ## ✦ Before committing
 
 ```bash
-pnpm check:architecture   # needs pnpm build:packages + a web build, or two assertions skip
+pnpm check architecture   # needs pnpm build:packages + a web build, or two assertions skip
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
@@ -130,7 +132,7 @@ pnpm typecheck && pnpm lint && pnpm test
 |---|---|
 | 500 on the first request, `ZodError` naming env keys | `.env` missing or incomplete |
 | `/api/health` returns 503 | A container is down, or a `.env` URL names the wrong host port |
-| `ECONNREFUSED` from `db:migrate` | Postgres not healthy yet, or the port is taken |
+| `ECONNREFUSED` from `db migrate` | Postgres not healthy yet, or the port is taken |
 | Signed up, still signed-out | No membership — `bootstrap` without seed/slug, or `invite` with no invitation |
 
 ## ✦ Big kit vs lite

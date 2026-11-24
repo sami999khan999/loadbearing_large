@@ -5,7 +5,7 @@ description: The analytics store that is defined and deliberately not running �
 
 # `clickhouse`
 
-Behind the `analytics` profile and **not** started by `pnpm infra:up` — a decision, not an oversight.
+Behind the `analytics` profile and **not** started by `pnpm infra up` — a decision, not an oversight.
 
 | | |
 | --- | --- |
@@ -37,7 +37,7 @@ decisions.
 > **A running analytics store with nothing writing to it looks like a decision somebody made.** The
 > next person assumes it is load-bearing, and the rebuild story quietly stops being true.
 
-So `CLICKHOUSE_URL` is unset in `.env.example`. `pnpm infra:up:analytics` starts the container; that
+So `CLICKHOUSE_URL` is unset in `.env.example`. `pnpm infra up analytics` starts the container; that
 variable *feeds* it. **The trigger:** snapshots stop covering ad-hoc queries — not size, not speed.
 
 ---
@@ -45,11 +45,11 @@ variable *feeds* it. **The trigger:** snapshots stop covering ad-hoc queries —
 ## Starting and stopping it
 
 ```bash
-pnpm infra:up:analytics
+pnpm infra up analytics
 docker compose -f infra/docker-compose.yml --profile analytics stop clickhouse
 ```
 
-`pnpm infra:down` and `infra:reset` pass `--profile "*"` and reach it; a plain `docker compose down`
+`pnpm infra down` and `infra reset` pass `--profile "*"` and reach it; a plain `docker compose down`
 does not, leaving a container nobody remembers starting.
 
 ---

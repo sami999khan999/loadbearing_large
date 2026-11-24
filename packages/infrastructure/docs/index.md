@@ -57,8 +57,9 @@ packages/infrastructure/
                    openai-assistant.model.ts → OpenAiAssistantModel
 ```
 
-**Runnable scripts sit above `src/`** — inside a folder, the barrel runs them on import (why `seed.ts`
-left `src/pg/seed/`, which keeps the class).
+**Runnable scripts sit in `script/`, above `src/`** — inside `src/`, a barrel would run them on
+import (why the seed left `src/pg/seed/`, which keeps the classes). `seed-dev.ts` and `seed-prod.ts`
+call one class, `DatabaseSeed`, whose steps are the subject folders under `src/pg/seed/`.
 
 **One folder per external system**, so `ls src/` lists the dependencies, and filenames lead with the
 technology ([Files](../../../docs/opinions/files.md)). **The system is the only subject:** the five
@@ -177,7 +178,7 @@ It reads the root `.env` explicitly — under a pnpm filter, bare `dotenv/config
 - [Assistant models](reference/assistant.md) — OpenAI, OpenRouter, Gemini and the canned fake behind
   `AssistantModel`: the stream, the two timeouts, and what a failure is
 - [Embedding](reference/embedding.md) — `none`, `openai` or `gemini`, lexical search, what a provider
-  switch does to the corpus, and `pnpm ai:reindex --adopt` for an upgrade
+  switch does to the corpus, and `pnpm ops ai-reindex --adopt` for an upgrade
 - [pgvector](reference/pgvector.md) — the permission filter on the input set, the score floor, and
   the `ORDER BY` that stops the index being used.
 - [Partitions](reference/partitions.md) — the allowlist as the whole policy, the two mechanics that

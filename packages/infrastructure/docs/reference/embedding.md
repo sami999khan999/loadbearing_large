@@ -43,7 +43,7 @@ Every chunk records `embedding_model`, and `search` reads only the active model'
 vector is another space), so after a switch old chunks are unread until re-embedded:
 
 ```bash
-pnpm ai:reindex
+pnpm ops ai-reindex
 ```
 
 One `reembed` job per organization on the embedding queue (eight attempts with backoff; not queued
@@ -56,7 +56,7 @@ nothing. Chunks written before `0055_chunk_embedding_model` have no model and co
 to boot) and run:
 
 ```bash
-pnpm ai:reindex --adopt
+pnpm ops ai-reindex --adopt
 ```
 
 It stamps the model on every vector-bearing, model-less chunk on every node, calling no provider, and
