@@ -8,9 +8,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { ClickHouseConnection } from "./src/clickhouse/index.js";
+import { ClickHouseConnection } from "../src/clickhouse/index.js";
 
-const DIR = join(import.meta.dirname, "clickhouse-migrations");
+const DIR = join(import.meta.dirname, "..", "clickhouse-migrations");
 
 // `MergeTree ORDER BY version` rather than a `ReplacingMergeTree`: a version applied
 // twice is a bug to see, not a duplicate to collapse.
@@ -101,7 +101,7 @@ const main = async (): Promise<void> => {
   const url = process.env.CLICKHOUSE_URL;
   if (!url) {
     console.log("CLICKHOUSE_URL is unset, so there is no analytics store to migrate.");
-    console.log("Set it and re-run, or start one with `pnpm infra:up:analytics`.");
+    console.log("Set it and re-run, or start one with `pnpm infra up analytics`.");
     return;
   }
 

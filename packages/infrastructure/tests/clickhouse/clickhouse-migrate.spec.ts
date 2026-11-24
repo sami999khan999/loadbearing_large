@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { migrationOf, statementsOf } from "../../clickhouse-migrate.js";
+import { migrationOf, statementsOf } from "../../script/clickhouse-migrate.js";
 
 const FIRST = fileURLToPath(
   new URL("../../clickhouse-migrations/0000_activity_events.sql", import.meta.url),

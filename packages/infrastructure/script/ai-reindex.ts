@@ -2,10 +2,10 @@
 // organization on the embedding queue; the worker re-embeds that tenant's stale chunks.
 // `--adopt` stamps pre-`0055` vectors instead; `--docs` indexes every published Docs page.
 
+import { BullMqQueuePublisher } from "../src/bullmq/index.js";
+import { QueueName, Redis, sql } from "../src/import.js";
+import { Database } from "../src/pg/primitive/index.js";
 import { shardUrls } from "./shard-env.js";
-import { BullMqQueuePublisher } from "./src/bullmq/index.js";
-import { QueueName, Redis, sql } from "./src/import.js";
-import { Database } from "./src/pg/primitive/index.js";
 
 const adopt = process.argv.includes("--adopt");
 // The backfill for pages published before `DC.2`; a publish after it indexes itself.
