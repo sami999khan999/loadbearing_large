@@ -4,6 +4,8 @@
 // ── node ─────────────────────────────────────────────────────────────────────
 export { AsyncLocalStorage } from "node:async_hooks";
 export { Buffer } from "node:buffer";
+// The docs seed reads the repository's trees and asks git where its forge is.
+export { execSync } from "node:child_process";
 export {
   createCipheriv,
   createDecipheriv,
@@ -12,6 +14,8 @@ export {
   randomBytes,
 } from "node:crypto";
 export { once } from "node:events";
+export { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+export { dirname, join, posix, relative, resolve, sep } from "node:path";
 export { Readable } from "node:stream";
 export { pipeline } from "node:stream/promises";
 export { createGunzip, createGzip } from "node:zlib";
@@ -120,6 +124,7 @@ export {
   type DocSpaceRepository,
   type DocSpaceSummary,
   type DocStalePageRecord,
+  DocTree,
   type DocumentChunk,
   type DomainEventPublisher,
   type EmailMessage,
@@ -326,7 +331,7 @@ export {
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
-export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
+export { type Clock, ServerOnly, SystemClock, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export {
