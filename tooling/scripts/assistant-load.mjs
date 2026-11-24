@@ -1,4 +1,4 @@
-// `pnpm assistant:load [--base url] [--users n] [--questions n] [--concurrency n,n]`:
+// `pnpm ops assistant-load [--base url] [--users n] [--questions n] [--concurrency n,n]`:
 // questions asked and streamed through web, worker and realtime, against `ASSISTANT_PROVIDER=fake`.
 // ──
 // Users are `load-<n>@example.test`, signed up and verified through Mailpit the first
